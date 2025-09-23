@@ -1,0 +1,46 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # Serviço do Backend (Node.js)
+  backend:
+    build: ./backend
+    container_name: backend_service
+    volumes:
+      - ./backend:/app # Sincroniza a pasta local com o contêiner
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - db # Garante que o DB inicie antes do backend
+
+  # Serviço do Frontend (React)
+  frontend:
+    build: ./frontend
+    container_name: frontend_service
+    volumes:
+      - ./frontend/src:/app/src # Sincroniza apenas a pasta src para hot-reloading
+
+  # Serviço do Banco de Dados (MongoDB)
+  db:
+    image: mongo:latest
+    container_name: mongo_db
+    ports:
+      - "27017:27017" # Expõe a porta do DB para o host (opcional, bom para debug)
+    volumes:
+      - mongo-data:/data/db
+
+  # Serviço do Nginx (Reverse Proxy)
+  proxy:
+    image: nginx:stable-alpine
+    container_name: nginx_proxy
+    ports:
+      - "80:80" # Expõe a porta 80 do Nginx para o seu computador
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf # Mapeia nosso arquivo de config
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  mongo-data: # Volume para persistir os dados do MongoDB
