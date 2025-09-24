@@ -1,38 +1,53 @@
-.App {
-  text-align: center;
+/* frontend/src/App.css */
+body {
+  font-family: sans-serif;
+  background-color: #f4f4f9;
+  color: #333;
+  margin: 0;
 }
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
+.App { text-align: center; }
 .App-header {
   background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+  padding: 20px;
   color: white;
+  margin-bottom: 2rem;
 }
-
-.App-link {
-  color: #61dafb;
+main {
+  max-width: 800px;
+  margin: auto;
+  padding: 1rem;
 }
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.form-container, .pedidos-container {
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
 }
+form { display: flex; gap: 10px; justify-content: center; }
+input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+button {
+  padding: 10px 15px;
+  border: none;
+  background-color: #61dafb;
+  color: #282c34;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+ul { list-style: none; padding: 0; }
+li {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  text-align: left;
+  border-left-width: 5px;
+}
+.status-text { font-weight: bold; }
+.status-pendente { border-left-color: #ffc107; }
+.status-aprovado { border-left-color: #28a745; }
+.status-recusado { border-left-color: #dc3545; }
+.status-pendente .status-text { color: #856404; }
+.status-aprovado .status-text { color: #155724; }
+.status-recusado .status-text { color: #721c24; }
