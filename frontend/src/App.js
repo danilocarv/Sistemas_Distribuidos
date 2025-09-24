@@ -14,7 +14,6 @@ function App() {
   const [newListName, setNewListName] = useState('');
 
   const fetchListas = () => {
-    // CORRIGIDO: Rota para buscar as listas
     axios.get('/api/lists/').then(response => {
       setListas(response.data);
     }).catch(err => console.error("Falha ao buscar listas:", err));
@@ -23,35 +22,40 @@ function App() {
   useEffect(() => {
     fetchListas();
   }, []);
-
+  
   useEffect(() => {
-    socket.on('item_adicionado', (novoItem) => {
-      // Garante que a atualização só aconteça se estivermos na lista correta
+    const handleItemAdicionado = (novoItem) => {
       if (selectedList && novoItem.listId === selectedList.id) {
         setItens(prevItens => [...prevItens, novoItem]);
       }
-    });
+    };
 
-    socket.on('item_atualizado', (itemAtualizado) => {
+    const handleItemAtualizado = (itemAtualizado) => {
       if (selectedList && itemAtualizado.listId === selectedList.id) {
         setItens(prevItens => prevItens.map(item =>
           item.id === itemAtualizado.id ? itemAtualizado : item
         ));
       }
-    });
+    };
+    
+    socket.on('item_adicionado', handleItemAdicionado);
+    socket.on('item_atualizado', handleItemAtualizado);
 
     return () => {
-      socket.off('item_adicionado');
-      socket.off('item_atualizado');
+      socket.off('item_adicionado', handleItemAdicionado);
+      socket.off('item_atualizado', handleItemAtualizado);
     };
   }, [selectedList]);
 
 
   const handleSelectList = (lista) => {
+    if (!lista || !lista.id) {
+      console.error("Tentativa de selecionar uma lista inválida:", lista);
+      return;
+    }
     setSelectedList(lista);
     socket.emit('entrar_lista', lista.id);
-
-    // CORRIGIDO: Rota para buscar os itens da lista selecionada
+    
     axios.get(`/api/items/${lista.id}`).then(response => {
       setItens(response.data);
     }).catch(err => console.error("Falha ao buscar itens:", err));
@@ -59,18 +63,28 @@ function App() {
 
   const handleAddItem = (e) => {
     e.preventDefault();
-    if (newItemName.trim() && selectedList) {
-      socket.emit('adicionar_item', { listId: selectedList.id, nomeItem: newItemName });
-      setNewItemName('');
+    if (!newItemName.trim() || !selectedList) {
+      return;
     }
+    const payload = { 
+      listId: selectedList.id, 
+      nomeItem: newItemName 
+    };
+    socket.emit('adicionar_item', payload);
+    setNewItemName('');
   };
-
+  
   const handleCreateList = async (e) => {
     e.preventDefault();
     if (newListName.trim()) {
-      await axios.post('/api/lists/', { nome: newListName });
-      setNewListName('');
-      fetchListas(); // Atualiza a lista de listas
+      try {
+        await axios.post('/api/lists/', { nome: newListName });
+        setNewListName('');
+        fetchListas();
+      } catch (error) {
+        console.error("Falha ao criar lista:", error);
+        alert("Não foi possível criar a lista.");
+      }
     }
   };
 

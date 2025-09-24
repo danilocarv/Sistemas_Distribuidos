@@ -8,6 +8,11 @@ services:
     volumes:
       - ./backend/listas-service:/app
       - /app/node_modules
+    environment:
+      # Passamos a URL de conexão para o serviço
+      - MONGO_URL=mongodb://db:27017/listacompartilhada
+    depends_on:
+      - db # Garante que o DB inicie antes deste serviço
 
   itens-service:
     build: ./backend/itens-service
@@ -15,6 +20,22 @@ services:
     volumes:
       - ./backend/itens-service:/app
       - /app/node_modules
+    environment:
+      # A mesma URL de conexão
+      - MONGO_URL=mongodb://db:27017/listacompartilhada
+    depends_on:
+      - db # Garante que o DB inicie antes deste serviço
+
+  # Serviço do Banco de Dados
+  db:
+    image: mongo:latest
+    container_name: mongo_db
+    ports:
+      # Expor a porta 27017 nos permite conectar com um cliente de DB (ex: Compass)
+      - "27017:27017" 
+    volumes:
+      # Este volume garante que os dados sejam salvos mesmo se o contêiner parar
+      - mongo-data:/data/db
 
   frontend:
     build: ./frontend
@@ -32,3 +53,7 @@ services:
       - listas-service
       - itens-service
       - frontend
+
+# Definição do volume nomeado
+volumes:
+  mongo-data:
