@@ -1,7 +1,7 @@
 # frontend/Dockerfile
 
 # Estágio 1: Build da aplicação React
-FROM node:18-alpine AS build
+FROM public.ecr.aws/docker/library/node:18-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm install

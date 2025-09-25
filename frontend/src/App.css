@@ -1,83 +1,192 @@
-/* frontend/src/App.css (VERSÃO COMPLETA E MELHORADA) */
+/* frontend/src/App.css (VERSÃO UNIFICADA E MELHORADA) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
 /* ================================================ */
-/* SEU CÓDIGO CSS ORIGINAL (PARA A APLICAÇÃO PRINCIPAL) */
+/* Definição de Variáveis dos Temas
 /* ================================================ */
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #f4f4f9;
-  color: #333;
-  margin: 0;
+:root {
+  /* Tema Claro (Padrão) */
+  --font-family: 'Inter', sans-serif;
+  --bg-color: #f4f7f9;
+  --surface-color: #ffffff;
+  --text-color: #1a202c;
+  --subtle-text-color: #718096;
+  --border-color: #e2e8f0;
+  --primary-color: #3182ce;
+  --primary-text-color: #ffffff;
+  --danger-color: #e53e3e;
+  --checked-text-color: #a0aec0;
+  --success-color: #28a745;
+  --header-bg: #2d3748;
+  --shadow-color: rgba(0, 0, 0, 0.05);
 }
-.App { text-align: center; }
-.App-header {
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
-  margin-bottom: 2rem;
+
+body.dark {
+  /* Tema Escuro */
+  --bg-color: #1a202c;
+  --surface-color: #2d3748;
+  --text-color: #e2e8f0;
+  --subtle-text-color: #a0aec0;
+  --border-color: #4a5568;
+  --primary-color: #63b3ed;
+  --primary-text-color: #1a202c;
+  --danger-color: #fc8181;
+  --checked-text-color: #718096;
+  --success-color: #48bb78;
+  --header-bg: #171923;
+  --shadow-color: rgba(0, 0, 0, 0.2);
+}
+
+/* ================================================ */
+/* Estilos Globais
+/* ================================================ */
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+/* ================================================ */
+/* Estilos da Aplicação Principal (Listas e Itens)
+/* ================================================ */
+.App {
+  text-align: center;
+}
+
+.container {
+  max-width: 700px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-main {
-  max-width: 800px;
-  margin: auto;
-  padding: 1rem;
-}
-.form-container, .pedidos-container {
-  background-color: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   margin-bottom: 2rem;
 }
-form { display: flex; gap: 10px; justify-content: center; }
-input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
-button {
-  padding: 10px 15px;
-  border: none;
-  background-color: #61dafb;
-  color: #282c34;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
+
+.header h1 {
+  font-size: 1.8rem;
+  margin: 0;
 }
-ul { list-style: none; padding: 0; }
-li {
-  padding: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
+
+.list-item, .list-selection li {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 6px -1px var(--shadow-color);
+  transition: all 0.2s ease-in-out;
   text-align: left;
-  border-left-width: 5px;
+  cursor: pointer;
 }
-.status-text { font-weight: bold; }
-.status-pendente { border-left-color: #ffc107; }
-.status-aprovado { border-left-color: #28a745; }
-.status-recusado { border-left-color: #dc3545; }
-.status-pendente .status-text { color: #856404; }
-.status-aprovado .status-text { color: #155724; }
-.status-recusado .status-text { color: #721c24; }
+
+.list-selection li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px var(--shadow-color);
+}
+
+.item-list .list-item.checked {
+  text-decoration: line-through;
+  color: var(--checked-text-color);
+  opacity: 0.7;
+}
+
+form {
+  background-color: var(--surface-color);
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px var(--shadow-color);
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+input[type="text"], input[type="password"], input[type="number"] {
+  flex-grow: 1;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-size: 1rem;
+}
+
+button {
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  background-color: var(--primary-color);
+  color: var(--primary-text-color);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+button:hover {
+  opacity: 0.85;
+}
+
+.delete-btn {
+  background: transparent;
+  color: var(--danger-color);
+  font-size: 1.2rem;
+  padding: 0.5rem;
+  transition: transform 0.2s;
+}
+
+.delete-btn:hover {
+  transform: scale(1.2);
+}
+
+.back-button {
+  background: transparent;
+  color: var(--primary-color);
+  padding: 0.5rem 0;
+}
+
+.theme-toggle-button {
+  background: var(--surface-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 
 /* ======================================================= */
-/* NOVO CÓDIGO CSS (PARA AS TELAS DE LOGIN E REGISTRO) */
+/* ESTILOS UNIFICADOS PARA AS TELAS DE LOGIN E REGISTRO */
 /* ======================================================= */
-
-.App-auth {
+.auth-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background-color: #f0f2f5;
 }
 
 .auth-form-container {
-  background-color: white;
+  background-color: var(--surface-color);
   padding: 2rem 2.5rem;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px var(--shadow-color);
   width: 100%;
   max-width: 400px;
   text-align: center;
@@ -86,54 +195,36 @@ li {
 .auth-form-container h2 {
   margin-top: 0;
   margin-bottom: 1.5rem;
-  color: #1c1e21;
+  color: var(--text-color);
   font-size: 24px;
 }
 
 .auth-form {
   display: flex;
-  flex-direction: column; /* Garante que os itens fiquem um abaixo do outro */
-  gap: 1rem; /* Espaçamento entre os itens do formulário */
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0; /* Remove a margem do formulário de login */
+  padding: 0; /* Remove o padding do formulário de login */
+  box-shadow: none; /* Remove a sombra do formulário de login */
 }
 
 .auth-form input {
-  padding: 12px;
-  font-size: 16px;
-  border: 1px solid #dddfe2;
-  border-radius: 6px;
-  width: calc(100% - 26px); /* Ajusta a largura considerando o padding */
-}
-
-.auth-form input:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  width: auto; /* Deixa o flexbox cuidar da largura */
 }
 
 .auth-form button {
   padding: 12px;
   font-size: 18px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: background-color 0.2s;
-}
-
-.auth-form button:hover {
-  background-color: #0056b3;
 }
 
 .message {
-  color: #28a745;
+  color: var(--success-color);
   margin-top: 1rem;
   font-weight: 500;
 }
 
 .error {
-  color: #dc3545;
+  color: var(--danger-color);
   margin-top: 1rem;
   font-weight: 500;
 }
@@ -141,13 +232,13 @@ li {
 .switch-auth-text {
   margin-top: 1.5rem;
   font-size: 14px;
-  color: #606770;
+  color: var(--subtle-text-color);
 }
 
 .link-button {
   background: none;
   border: none;
-  color: #007bff;
+  color: var(--primary-color);
   cursor: pointer;
   text-decoration: none;
   padding: 0;
