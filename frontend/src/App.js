@@ -2,9 +2,21 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
+import { useTheme } from './ThemeContext'; // Importa nosso hook de tema
+import { FaTrash, FaMoon, FaSun } from 'react-icons/fa'; // Importa os ícones
 import './App.css';
 
 const socket = io("http://localhost");
+
+// Componente do botão de tema
+const ThemeToggleButton = () => {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button className="theme-toggle-button" onClick={toggleTheme} title="Alterar Tema">
+      {theme === 'light' ? <FaMoon /> : <FaSun />}
+    </button>
+  );
+};
 
 function App() {
   const [listas, setListas] = useState([]);
@@ -22,7 +34,7 @@ function App() {
   useEffect(() => {
     fetchListas();
   }, []);
-  
+
   useEffect(() => {
     const handleItemAdicionado = (novoItem) => {
       if (selectedList && novoItem.listId === selectedList.id) {
@@ -41,7 +53,7 @@ function App() {
         setItens(prevItens => prevItens.filter(item => item.id !== itemId));
       }
     };
-    
+
     socket.on('item_adicionado', handleItemAdicionado);
     socket.on('item_atualizado', handleItemAtualizado);
     socket.on('item_deletado', handleItemDeletado);
@@ -60,7 +72,6 @@ function App() {
     }
     setSelectedList(lista);
     socket.emit('entrar_lista', lista.id);
-    
     axios.get(`/api/items/${lista.id}`).then(response => {
       setItens(response.data);
     }).catch(err => console.error("Falha ao buscar itens:", err));
@@ -73,7 +84,7 @@ function App() {
     socket.emit('adicionar_item', payload);
     setNewItemName('');
   };
-  
+
   const handleDeleteItem = (e, itemId) => {
     e.stopPropagation();
     if (selectedList) {
@@ -95,14 +106,11 @@ function App() {
     }
   };
 
-  // --- NOVA FUNÇÃO PARA DELETAR LISTAS ---
   const handleDeleteList = async (e, listId) => {
-    e.stopPropagation(); // Impede que o clique no botão também selecione a lista
-
+    e.stopPropagation();
     if (window.confirm('Tem certeza que deseja apagar esta lista e todos os seus itens?')) {
       try {
         await axios.delete(`/api/lists/${listId}`);
-        // Remove a lista da interface para uma resposta visual imediata
         setListas(prevListas => prevListas.filter(lista => lista.id !== listId));
       } catch (error) {
         console.error("Falha ao deletar a lista:", error);
@@ -110,7 +118,6 @@ function App() {
       }
     }
   };
-  // ------------------------------------
 
   const handleToggleItem = (item) => {
     if (selectedList) {
@@ -118,60 +125,66 @@ function App() {
     }
   };
 
-  if (!selectedList) {
-    return (
-      <div className="App">
-        <h1>Selecione ou Crie uma Lista</h1>
-        <div className="list-selection">
-          <ul>
-            {listas.map(lista => (
-              // --- MUDANÇA AQUI DENTRO DO <li> PARA ADICIONAR O BOTÃO ---
-              <li key={lista.id} onClick={() => handleSelectList(lista)}>
-                <span>{lista.nome}</span>
-                <button className="delete-btn" onClick={(e) => handleDeleteList(e, lista.id)}>X</button>
-              </li>
-              // -----------------------------------------------------------
-            ))}
-          </ul>
-          <form onSubmit={handleCreateList} className="new-list-form">
-            <input 
-              type="text"
-              value={newListName}
-              onChange={(e) => setNewListName(e.target.value)}
-              placeholder="Nome da nova lista"
-            />
-            <button type="submit">Criar Lista</button>
-          </form>
-        </div>
+  const renderListSelection = () => (
+    <div className="container">
+      <div className="header">
+        <h1>Minhas Listas</h1>
+        <ThemeToggleButton />
       </div>
-    );
-  }
+      <ul className="list-selection">
+        {listas.map(lista => (
+          <li key={lista.id} onClick={() => handleSelectList(lista)}>
+            <span>{lista.nome}</span>
+            <button className="delete-btn" onClick={(e) => handleDeleteList(e, lista.id)} title="Excluir lista">
+              <FaTrash />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={handleCreateList} className="new-list-form">
+        <input 
+          type="text"
+          value={newListName}
+          onChange={(e) => setNewListName(e.target.value)}
+          placeholder="Nome da nova lista"
+        />
+        <button type="submit">Criar Lista</button>
+      </form>
+    </div>
+  );
+
+  const renderItemView = () => (
+    <div className="container">
+      <div className="header">
+        <button className="back-button" onClick={() => setSelectedList(null)}>← Voltar para Listas</button>
+        <h1>{selectedList.nome}</h1>
+        <ThemeToggleButton />
+      </div>
+      <form onSubmit={handleAddItem} className="add-item-form">
+        <input
+          type="text"
+          value={newItemName}
+          onChange={(e) => setNewItemName(e.target.value)}
+          placeholder="Adicionar novo item"
+        />
+        <button type="submit">Adicionar</button>
+      </form>
+      <ul className="item-list">
+        {itens.map(item => (
+          <li key={item.id} onClick={() => handleToggleItem(item)} className={`list-item ${item.checked ? 'checked' : ''}`}>
+            <span>{item.nome}</span>
+            <button className="delete-btn" onClick={(e) => handleDeleteItem(e, item.id)} title="Excluir item">
+              <FaTrash />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 
   return (
     <div className="App">
-      <header className="App-header">
-        <button onClick={() => setSelectedList(null)}>← Voltar para Listas</button>
-        <h1>{selectedList.nome}</h1>
-      </header>
-      <main>
-        <form onSubmit={handleAddItem} className="add-item-form">
-          <input
-            type="text"
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-            placeholder="Adicionar novo item"
-          />
-          <button type="submit">Adicionar</button>
-        </form>
-        <ul className="item-list">
-          {itens.map(item => (
-            <li key={item.id} onClick={() => handleToggleItem(item)} className={item.checked ? 'checked' : ''}>
-              <span>{item.nome}</span>
-              <button className="delete-btn" onClick={(e) => handleDeleteItem(e, item.id)}>X</button>
-            </li>
-          ))}
-        </ul>
-      </main>
+      {!selectedList ? renderListSelection() : renderItemView()}
     </div>
   );
 }
