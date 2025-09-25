@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
-import { useTheme } from './ThemeContext'; // Importa nosso hook de tema
-import { FaTrash, FaMoon, FaSun } from 'react-icons/fa'; // Importa os ícones
+import { useTheme } from './ThemeContext';
+import { FaTrash, FaMoon, FaSun } from 'react-icons/fa';
 import './App.css';
 
 const socket = io("http://localhost");
 
-// Componente do botão de tema
+// Componente do botão de tema (sem alterações)
 const ThemeToggleButton = () => {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -34,16 +34,21 @@ function App() {
   useEffect(() => {
     fetchListas();
   }, []);
-
+  
   useEffect(() => {
     const handleItemAdicionado = (novoItem) => {
       setItens(prevItens => [...prevItens, novoItem]);
     };
+
+    // --- ESTA FUNÇÃO FOI CORRIGIDA ---
+    // Removemos a verificação 'if (selectedList...)' que estava causando o bug
     const handleItemAtualizado = (itemAtualizado) => {
       setItens(prevItens => prevItens.map(item =>
         item.id === itemAtualizado.id ? itemAtualizado : item
       ));
     };
+    // ------------------------------------
+
     const handleItemDeletado = ({ itemId }) => {
       setItens(prevItens => prevItens.filter(item => item.id !== itemId));
     };
@@ -78,7 +83,7 @@ function App() {
     socket.emit('adicionar_item', payload);
     setNewItemName('');
   };
-
+  
   const handleDeleteItem = (e, itemId) => {
     e.stopPropagation();
     if (selectedList) {
@@ -99,7 +104,7 @@ function App() {
       }
     }
   };
-
+  
   const handleDeleteList = async (e, listId) => {
     e.stopPropagation();
     if (window.confirm('Tem certeza que deseja apagar esta lista e todos os seus itens?')) {
@@ -113,11 +118,14 @@ function App() {
     }
   };
 
+  // --- ESTA É A FUNÇÃO QUE RISCA O ITEM ---
   const handleToggleItem = (item) => {
     if (selectedList) {
+      // Envia o estado oposto do 'checked' atual para o backend
       socket.emit('marcar_item', { listId: selectedList.id, itemId: item.id, checked: !item.checked });
     }
   };
+  // ----------------------------------------
 
   const renderListSelection = () => (
     <div className="container">
@@ -165,12 +173,18 @@ function App() {
       </form>
       <ul className="item-list">
         {itens.map(item => (
-          <li key={item.id} onClick={() => handleToggleItem(item)} className={`list-item ${item.checked ? 'checked' : ''}`}>
+          // --- A LÓGICA DO CLIQUE ESTÁ NESTA LINHA ---
+          <li 
+            key={item.id} 
+            onClick={() => handleToggleItem(item)} // Ao clicar, chama a função de marcar/desmarcar
+            className={`list-item ${item.checked ? 'checked' : ''}`} // Aplica a classe 'checked' se o item estiver marcado
+          >
             <span>{item.nome}</span>
             <button className="delete-btn" onClick={(e) => handleDeleteItem(e, item.id)} title="Excluir item">
               <FaTrash />
             </button>
           </li>
+          // ------------------------------------------
         ))}
       </ul>
     </div>

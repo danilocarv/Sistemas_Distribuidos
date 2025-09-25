@@ -74,6 +74,7 @@ body {
   box-shadow: 0 4px 6px -1px var(--shadow-color);
   transition: all 0.2s ease-in-out;
   text-align: left;
+  cursor: pointer;
 }
 
 .list-selection li {

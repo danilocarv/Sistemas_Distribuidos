@@ -5,7 +5,6 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
 
-// ... (código de conexão com o MongoDB e Schemas - sem alterações)
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -17,7 +16,7 @@ const MONGO_URL = process.env.MONGO_URL;
 mongoose.connect(MONGO_URL)
   .then(() => console.log('Itens-service conectado ao MongoDB.'))
   .catch(err => console.error('Erro ao conectar ao MongoDB:', err));
-
+  
 const ItemSchema = new mongoose.Schema({
   _id: { type: String, required: true },
   nome: { type: String, required: true },
@@ -39,6 +38,18 @@ app.get('/items/:listId', async (req, res) => {
   }
 });
 
+app.delete('/items/by-list/:listId', async (req, res) => {
+    try {
+        const { listId } = req.params;
+        const result = await Item.deleteMany({ listId: listId });
+        console.log(`Deletados ${result.deletedCount} itens da lista ${listId} via HTTP.`);
+        res.status(200).json({ message: `${result.deletedCount} itens deletados.` });
+    } catch (error) {
+        console.error('Erro ao deletar itens via HTTP:', error);
+        res.status(500).json({ message: 'Erro ao deletar itens.' });
+    }
+});
+
 io.on('connection', (socket) => {
   console.log(`[Socket.IO] Cliente conectado: ${socket.id}`);
 
@@ -49,30 +60,35 @@ io.on('connection', (socket) => {
 
   socket.on('adicionar_item', async ({ listId, nomeItem }) => {
     try {
-      console.log(`[BACKEND] Recebido 'adicionar_item' para a lista ${listId}`);
       const newItemId = new Date().getTime().toString();
       const item = new Item({ _id: newItemId, nome: nomeItem, listId: listId });
       await item.save();
-      console.log(`[BACKEND] Item salvo no DB. ID: ${newItemId}`);
-
       const itemParaEmitir = { id: item._id, nome: item.nome, checked: item.checked, listId: item.listId };
       io.to(listId).emit('item_adicionado', itemParaEmitir);
-      console.log(`[BACKEND] Emitindo 'item_adicionado' para a sala ${listId}`);
     } catch (error) {
       console.error('[BACKEND] ERRO ao adicionar item:', error);
     }
   });
 
-  socket.on('marcar_item', async ({ listId, itemId, checked }) => { /* ... (sem alterações) */ });
+  // --- LÓGICA COMPLETA E CORRIGIDA PARA MARCAR/DESMARCAR ---
+  socket.on('marcar_item', async ({ listId, itemId, checked }) => {
+    try {
+      const itemAtualizado = await Item.findByIdAndUpdate(itemId, { checked: checked }, { new: true });
+      if (itemAtualizado) {
+        const itemParaEmitir = { id: itemAtualizado._id, nome: itemAtualizado.nome, checked: itemAtualizado.checked, listId: itemAtualizado.listId };
+        io.to(listId).emit('item_atualizado', itemParaEmitir);
+      }
+    } catch (error) {
+      console.error(`[BACKEND] ERRO ao marcar o item ${itemId}:`, error);
+    }
+  });
+  // --------------------------------------------------------
 
   socket.on('deletar_item', async ({ listId, itemId }) => {
     try {
-      console.log(`[BACKEND] Recebido 'deletar_item' para o item ${itemId}`);
       const deletedItem = await Item.findByIdAndDelete(itemId);
-
       if (deletedItem) {
         io.to(listId).emit('item_deletado', { listId, itemId });
-        console.log(`[BACKEND] Emitindo 'item_deletado' para a sala ${listId}`);
       }
     } catch (error) {
       console.error(`[BACKEND] ERRO ao deletar o item ${itemId}:`, error);
