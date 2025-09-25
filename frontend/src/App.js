@@ -37,21 +37,15 @@ function App() {
 
   useEffect(() => {
     const handleItemAdicionado = (novoItem) => {
-      if (selectedList && novoItem.listId === selectedList.id) {
-        setItens(prevItens => [...prevItens, novoItem]);
-      }
+      setItens(prevItens => [...prevItens, novoItem]);
     };
     const handleItemAtualizado = (itemAtualizado) => {
-      if (selectedList && itemAtualizado.listId === selectedList.id) {
-        setItens(prevItens => prevItens.map(item =>
-          item.id === itemAtualizado.id ? itemAtualizado : item
-        ));
-      }
+      setItens(prevItens => prevItens.map(item =>
+        item.id === itemAtualizado.id ? itemAtualizado : item
+      ));
     };
-    const handleItemDeletado = ({ listId, itemId }) => {
-      if (selectedList && listId === selectedList.id) {
-        setItens(prevItens => prevItens.filter(item => item.id !== itemId));
-      }
+    const handleItemDeletado = ({ itemId }) => {
+      setItens(prevItens => prevItens.filter(item => item.id !== itemId));
     };
 
     socket.on('item_adicionado', handleItemAdicionado);
@@ -63,7 +57,7 @@ function App() {
       socket.off('item_atualizado', handleItemAtualizado);
       socket.off('item_deletado', handleItemDeletado);
     };
-  }, [selectedList]);
+  }, []);
 
   const handleSelectList = (lista) => {
     if (!lista || !lista.id) {

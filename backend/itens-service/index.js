@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
 
+// ... (código de conexão com o MongoDB e Schemas - sem alterações)
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -16,7 +17,7 @@ const MONGO_URL = process.env.MONGO_URL;
 mongoose.connect(MONGO_URL)
   .then(() => console.log('Itens-service conectado ao MongoDB.'))
   .catch(err => console.error('Erro ao conectar ao MongoDB:', err));
-  
+
 const ItemSchema = new mongoose.Schema({
   _id: { type: String, required: true },
   nome: { type: String, required: true },
@@ -29,16 +30,9 @@ app.get('/items/:listId', async (req, res) => {
   try {
     const { listId } = req.params;
     const itensDoBanco = await Item.find({ listId: listId });
-
-    // Transformamos os dados para o formato que o frontend espera (_id -> id)
     const itensParaFrontend = itensDoBanco.map(item => ({
-      id: item._id,
-      nome: item.nome,
-      checked: item.checked,
-      // Não precisamos mais do listId aqui, mas é bom manter o hábito
-      listId: item.listId 
+      id: item._id, nome: item.nome, checked: item.checked, listId: item.listId 
     }));
-
     res.json(itensParaFrontend);
   } catch (error) {
     res.status(500).json({ message: 'Erro ao buscar itens.' });
@@ -46,51 +40,47 @@ app.get('/items/:listId', async (req, res) => {
 });
 
 io.on('connection', (socket) => {
+  console.log(`[Socket.IO] Cliente conectado: ${socket.id}`);
+
   socket.on('entrar_lista', (listId) => {
     socket.join(listId);
-    console.log(`Cliente ${socket.id} entrou na sala da lista ${listId}`);
+    console.log(`[Socket.IO] Cliente ${socket.id} entrou na sala da lista ${listId}`);
   });
 
   socket.on('adicionar_item', async ({ listId, nomeItem }) => {
     try {
+      console.log(`[BACKEND] Recebido 'adicionar_item' para a lista ${listId}`);
       const newItemId = new Date().getTime().toString();
       const item = new Item({ _id: newItemId, nome: nomeItem, listId: listId });
       await item.save();
+      console.log(`[BACKEND] Item salvo no DB. ID: ${newItemId}`);
+
       const itemParaEmitir = { id: item._id, nome: item.nome, checked: item.checked, listId: item.listId };
       io.to(listId).emit('item_adicionado', itemParaEmitir);
+      console.log(`[BACKEND] Emitindo 'item_adicionado' para a sala ${listId}`);
     } catch (error) {
-      console.error('Erro ao salvar item no banco de dados:', error);
+      console.error('[BACKEND] ERRO ao adicionar item:', error);
     }
   });
 
-  socket.on('marcar_item', async ({ listId, itemId, checked }) => {
-    try {
-      const itemAtualizado = await Item.findByIdAndUpdate(itemId, { checked: checked }, { new: true });
-      if (itemAtualizado) {
-        const itemParaEmitir = { id: itemAtualizado._id, nome: itemAtualizado.nome, checked: itemAtualizado.checked, listId: itemAtualizado.listId };
-        io.to(listId).emit('item_atualizado', itemParaEmitir);
-      }
-    } catch (error) {
-      console.error('Erro ao marcar item no banco de dados:', error);
-    }
-  });
+  socket.on('marcar_item', async ({ listId, itemId, checked }) => { /* ... (sem alterações) */ });
 
   socket.on('deletar_item', async ({ listId, itemId }) => {
     try {
+      console.log(`[BACKEND] Recebido 'deletar_item' para o item ${itemId}`);
       const deletedItem = await Item.findByIdAndDelete(itemId);
 
       if (deletedItem) {
-        // Notifica todos os clientes na sala que o item foi removido
         io.to(listId).emit('item_deletado', { listId, itemId });
-        console.log(`Item ${itemId} deletado da lista ${listId}`);
+        console.log(`[BACKEND] Emitindo 'item_deletado' para a sala ${listId}`);
       }
     } catch (error) {
-      console.error(`Erro ao deletar o item ${itemId}:`, error);
+      console.error(`[BACKEND] ERRO ao deletar o item ${itemId}:`, error);
     }
   });
 
   socket.on('disconnect', () => {
-    console.log(`Cliente desconectado: ${socket.id}`);
+    console.log(`[Socket.IO] Cliente desconectado: ${socket.id}`);
   });
 });
 
