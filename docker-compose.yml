@@ -1,4 +1,5 @@
-# docker-compose.yml
+# docker-compose.yml (VERSÃO CORRIGIDA E COMPLETA)
+
 version: '3.8'
 
 services:
@@ -8,6 +9,8 @@ services:
     volumes:
       - ./backend/listas-service:/app
       - /app/node_modules
+    networks:
+      - app-network
 
   itens-service:
     build: ./backend/itens-service
@@ -15,12 +18,47 @@ services:
     volumes:
       - ./backend/itens-service:/app
       - /app/node_modules
+    networks:
+      - app-network
+
+  user_service:
+    build:
+      context: ./backend/user-service
+    container_name: user_service
+    command: npm start
+    volumes:
+      - ./backend/user-service:/app
+      - /app/node_modules
+    ports:
+      - "3003:3003"
+    environment:
+      - DATABASE_URL=postgres://user:password@user-db:5432/userdb
+    depends_on:
+      - user-db
+    networks:
+      - app-network
+
+  user-db:
+    image: postgres:13-alpine
+    container_name: user-db
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=userdb
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network
 
   frontend:
     build: ./frontend
     container_name: frontend_service
     volumes:
       - ./frontend/src:/app/src
+    networks:
+      - app-network
 
   proxy:
     build:
@@ -32,3 +70,13 @@ services:
       - listas-service
       - itens-service
       - frontend
+      - user_service
+    networks:
+      - app-network
+
+volumes:
+  user_db_data:
+
+networks:
+  app-network:
+    driver: bridge
