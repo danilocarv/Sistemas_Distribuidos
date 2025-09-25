@@ -29,7 +29,6 @@ function App() {
         setItens(prevItens => [...prevItens, novoItem]);
       }
     };
-
     const handleItemAtualizado = (itemAtualizado) => {
       if (selectedList && itemAtualizado.listId === selectedList.id) {
         setItens(prevItens => prevItens.map(item =>
@@ -37,16 +36,22 @@ function App() {
         ));
       }
     };
+    const handleItemDeletado = ({ listId, itemId }) => {
+      if (selectedList && listId === selectedList.id) {
+        setItens(prevItens => prevItens.filter(item => item.id !== itemId));
+      }
+    };
     
     socket.on('item_adicionado', handleItemAdicionado);
     socket.on('item_atualizado', handleItemAtualizado);
+    socket.on('item_deletado', handleItemDeletado);
 
     return () => {
       socket.off('item_adicionado', handleItemAdicionado);
       socket.off('item_atualizado', handleItemAtualizado);
+      socket.off('item_deletado', handleItemDeletado);
     };
   }, [selectedList]);
-
 
   const handleSelectList = (lista) => {
     if (!lista || !lista.id) {
@@ -63,17 +68,19 @@ function App() {
 
   const handleAddItem = (e) => {
     e.preventDefault();
-    if (!newItemName.trim() || !selectedList) {
-      return;
-    }
-    const payload = { 
-      listId: selectedList.id, 
-      nomeItem: newItemName 
-    };
+    if (!newItemName.trim() || !selectedList) return;
+    const payload = { listId: selectedList.id, nomeItem: newItemName };
     socket.emit('adicionar_item', payload);
     setNewItemName('');
   };
   
+  const handleDeleteItem = (e, itemId) => {
+    e.stopPropagation();
+    if (selectedList) {
+      socket.emit('deletar_item', { listId: selectedList.id, itemId: itemId });
+    }
+  };
+
   const handleCreateList = async (e) => {
     e.preventDefault();
     if (newListName.trim()) {
@@ -88,6 +95,23 @@ function App() {
     }
   };
 
+  // --- NOVA FUNÇÃO PARA DELETAR LISTAS ---
+  const handleDeleteList = async (e, listId) => {
+    e.stopPropagation(); // Impede que o clique no botão também selecione a lista
+
+    if (window.confirm('Tem certeza que deseja apagar esta lista e todos os seus itens?')) {
+      try {
+        await axios.delete(`/api/lists/${listId}`);
+        // Remove a lista da interface para uma resposta visual imediata
+        setListas(prevListas => prevListas.filter(lista => lista.id !== listId));
+      } catch (error) {
+        console.error("Falha ao deletar a lista:", error);
+        alert('Não foi possível apagar a lista.');
+      }
+    }
+  };
+  // ------------------------------------
+
   const handleToggleItem = (item) => {
     if (selectedList) {
       socket.emit('marcar_item', { listId: selectedList.id, itemId: item.id, checked: !item.checked });
@@ -101,9 +125,12 @@ function App() {
         <div className="list-selection">
           <ul>
             {listas.map(lista => (
+              // --- MUDANÇA AQUI DENTRO DO <li> PARA ADICIONAR O BOTÃO ---
               <li key={lista.id} onClick={() => handleSelectList(lista)}>
-                {lista.nome}
+                <span>{lista.nome}</span>
+                <button className="delete-btn" onClick={(e) => handleDeleteList(e, lista.id)}>X</button>
               </li>
+              // -----------------------------------------------------------
             ))}
           </ul>
           <form onSubmit={handleCreateList} className="new-list-form">
@@ -139,7 +166,8 @@ function App() {
         <ul className="item-list">
           {itens.map(item => (
             <li key={item.id} onClick={() => handleToggleItem(item)} className={item.checked ? 'checked' : ''}>
-              {item.nome}
+              <span>{item.nome}</span>
+              <button className="delete-btn" onClick={(e) => handleDeleteItem(e, item.id)}>X</button>
             </li>
           ))}
         </ul>

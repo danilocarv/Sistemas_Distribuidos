@@ -44,6 +44,24 @@ li {
   text-align: left;
   border-left-width: 5px;
 }
+li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.delete-btn {
+  background: #ff4d4d;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-weight: bold;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 .status-text { font-weight: bold; }
 .status-pendente { border-left-color: #ffc107; }
 .status-aprovado { border-left-color: #28a745; }

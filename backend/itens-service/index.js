@@ -28,8 +28,18 @@ const Item = mongoose.model('Item', ItemSchema);
 app.get('/items/:listId', async (req, res) => {
   try {
     const { listId } = req.params;
-    const itens = await Item.find({ listId: listId });
-    res.json(itens);
+    const itensDoBanco = await Item.find({ listId: listId });
+
+    // Transformamos os dados para o formato que o frontend espera (_id -> id)
+    const itensParaFrontend = itensDoBanco.map(item => ({
+      id: item._id,
+      nome: item.nome,
+      checked: item.checked,
+      // Não precisamos mais do listId aqui, mas é bom manter o hábito
+      listId: item.listId 
+    }));
+
+    res.json(itensParaFrontend);
   } catch (error) {
     res.status(500).json({ message: 'Erro ao buscar itens.' });
   }
@@ -62,6 +72,20 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('Erro ao marcar item no banco de dados:', error);
+    }
+  });
+
+  socket.on('deletar_item', async ({ listId, itemId }) => {
+    try {
+      const deletedItem = await Item.findByIdAndDelete(itemId);
+
+      if (deletedItem) {
+        // Notifica todos os clientes na sala que o item foi removido
+        io.to(listId).emit('item_deletado', { listId, itemId });
+        console.log(`Item ${itemId} deletado da lista ${listId}`);
+      }
+    } catch (error) {
+      console.error(`Erro ao deletar o item ${itemId}:`, error);
     }
   });
 
