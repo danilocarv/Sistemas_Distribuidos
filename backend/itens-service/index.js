@@ -58,6 +58,16 @@ io.on('connection', (socket) => {
     console.log(`[Socket.IO] Cliente ${socket.id} entrou na sala da lista ${listId}`);
   });
 
+  socket.on('lista_criada', (novaLista) => {
+    // Retransmite para todos os outros clientes
+    socket.broadcast.emit('nova_lista_para_todos', novaLista);
+  });
+
+  socket.on('lista_deletada', ({ listId }) => {
+    // Retransmite para todos os outros clientes
+    socket.broadcast.emit('lista_removida_de_todos', { id: listId });
+  });
+
   socket.on('adicionar_item', async ({ listId, nomeItem }) => {
     try {
       const newItemId = new Date().getTime().toString();

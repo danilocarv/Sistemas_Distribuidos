@@ -1,4 +1,3 @@
-// frontend/src/App.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
@@ -8,7 +7,7 @@ import './App.css';
 
 const socket = io();
 
-// Componente do botão de tema (sem alterações)
+// Componente do botão de tema
 const ThemeToggleButton = () => {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -36,33 +35,51 @@ function App() {
   }, []);
   
   useEffect(() => {
+    // --- OUVINTES DE EVENTOS EM TEMPO REAL ---
+
+    // Ouvintes para eventos de LISTAS
+    const handleNovaLista = (novaLista) => {
+      setListas(prevListas => [...prevListas, novaLista]);
+    };
+    const handleListaRemovida = ({ id }) => {
+      setListas(prevListas => prevListas.filter(lista => lista.id !== id));
+    };
+
+    // Ouvintes para eventos de ITENS
     const handleItemAdicionado = (novoItem) => {
-      setItens(prevItens => [...prevItens, novoItem]);
+      if (selectedList && novoItem.listId === selectedList.id) {
+        setItens(prevItens => [...prevItens, novoItem]);
+      }
     };
-
-    // --- ESTA FUNÇÃO FOI CORRIGIDA ---
-    // Removemos a verificação 'if (selectedList...)' que estava causando o bug
     const handleItemAtualizado = (itemAtualizado) => {
-      setItens(prevItens => prevItens.map(item =>
-        item.id === itemAtualizado.id ? itemAtualizado : item
-      ));
+      if (selectedList && itemAtualizado.listId === selectedList.id) {
+        setItens(prevItens => prevItens.map(item =>
+          item.id === itemAtualizado.id ? itemAtualizado : item
+        ));
+      }
     };
-    // ------------------------------------
-
-    const handleItemDeletado = ({ itemId }) => {
-      setItens(prevItens => prevItens.filter(item => item.id !== itemId));
+    const handleItemDeletado = ({ listId, itemId }) => {
+      if (selectedList && listId === selectedList.id) {
+        setItens(prevItens => prevItens.filter(item => item.id !== itemId));
+      }
     };
-
+    
+    // Registrando os listeners
     socket.on('item_adicionado', handleItemAdicionado);
     socket.on('item_atualizado', handleItemAtualizado);
     socket.on('item_deletado', handleItemDeletado);
+    socket.on('nova_lista_para_todos', handleNovaLista);
+    socket.on('lista_removida_de_todos', handleListaRemovida);
 
+    // Limpando os listeners ao sair
     return () => {
       socket.off('item_adicionado', handleItemAdicionado);
       socket.off('item_atualizado', handleItemAtualizado);
       socket.off('item_deletado', handleItemDeletado);
+      socket.off('nova_lista_para_todos', handleNovaLista);
+      socket.off('lista_removida_de_todos', handleListaRemovida);
     };
-  }, []);
+  }, [selectedList]); // Depende da lista selecionada para atualizar itens corretamente
 
   const handleSelectList = (lista) => {
     if (!lista || !lista.id) {
@@ -95,9 +112,14 @@ function App() {
     e.preventDefault();
     if (newListName.trim()) {
       try {
-        await axios.post('/api/lists/', { nome: newListName });
+        const response = await axios.post('/api/lists/', { nome: newListName });
+        const novaLista = response.data;
+        
+        fetchListas(); // Atualiza a UI local
         setNewListName('');
-        fetchListas();
+        
+        // Notifica os outros clientes sobre a nova lista
+        socket.emit('lista_criada', novaLista);
       } catch (error) {
         console.error("Falha ao criar lista:", error);
         alert("Não foi possível criar a lista.");
@@ -111,6 +133,9 @@ function App() {
       try {
         await axios.delete(`/api/lists/${listId}`);
         setListas(prevListas => prevListas.filter(lista => lista.id !== listId));
+        
+        // Notifica os outros clientes sobre a lista deletada
+        socket.emit('lista_deletada', { listId });
       } catch (error) {
         console.error("Falha ao deletar a lista:", error);
         alert('Não foi possível apagar a lista.');
@@ -118,14 +143,11 @@ function App() {
     }
   };
 
-  // --- ESTA É A FUNÇÃO QUE RISCA O ITEM ---
   const handleToggleItem = (item) => {
     if (selectedList) {
-      // Envia o estado oposto do 'checked' atual para o backend
       socket.emit('marcar_item', { listId: selectedList.id, itemId: item.id, checked: !item.checked });
     }
   };
-  // ----------------------------------------
 
   const renderListSelection = () => (
     <div className="container">
@@ -173,18 +195,12 @@ function App() {
       </form>
       <ul className="item-list">
         {itens.map(item => (
-          // --- A LÓGICA DO CLIQUE ESTÁ NESTA LINHA ---
-          <li 
-            key={item.id} 
-            onClick={() => handleToggleItem(item)} // Ao clicar, chama a função de marcar/desmarcar
-            className={`list-item ${item.checked ? 'checked' : ''}`} // Aplica a classe 'checked' se o item estiver marcado
-          >
+          <li key={item.id} onClick={() => handleToggleItem(item)} className={`list-item ${item.checked ? 'checked' : ''}`}>
             <span>{item.nome}</span>
             <button className="delete-btn" onClick={(e) => handleDeleteItem(e, item.id)} title="Excluir item">
               <FaTrash />
             </button>
           </li>
-          // ------------------------------------------
         ))}
       </ul>
     </div>
