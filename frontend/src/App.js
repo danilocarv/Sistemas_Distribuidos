@@ -6,7 +6,7 @@ import { useTheme } from './ThemeContext';
 import { FaTrash, FaMoon, FaSun } from 'react-icons/fa';
 import './App.css';
 
-const socket = io("http://localhost");
+const socket = io();
 
 // Componente do botão de tema (sem alterações)
 const ThemeToggleButton = () => {
