@@ -1,10 +1,7 @@
-# docker-compose.yml (VERSÃO CORRIGIDA E COMPLETA)
-
-# A linha 'version' é obsoleta e pode ser removida.
-# version: '3.8' 
+# docker-compose.yml
+version: '3.8'
 
 services:
-  # Seu serviço de listas, agora na rede compartilhada
   listas-service:
     build: ./backend/listas-service
     container_name: listas_service
@@ -12,13 +9,11 @@ services:
       - ./backend/listas-service:/app
       - /app/node_modules
     environment:
+      # Passamos a URL de conexão para o serviço
       - MONGO_URL=mongodb://db:27017/listacompartilhada
     depends_on:
-      - db
-    networks:
-      - app-network
+      - db # Garante que o DB inicie antes deste serviço
 
-  # Seu serviço de itens, agora na rede compartilhada
   itens-service:
     build: ./backend/itens-service
     container_name: itens_service
@@ -26,66 +21,28 @@ services:
       - ./backend/itens-service:/app
       - /app/node_modules
     environment:
+      # A mesma URL de conexão
       - MONGO_URL=mongodb://db:27017/listacompartilhada
     depends_on:
-      - db
-    networks:
-      - app-network
+      - db # Garante que o DB inicie antes deste serviço
 
-  # Novo serviço de usuário do seu amigo
-  user_service:
-    build:
-      context: ./backend/user-service
-    container_name: user_service
-    command: npm start
-    volumes:
-      - ./backend/user-service:/app
-      - /app/node_modules
-    ports:
-      - "3003:3003"
-    environment:
-      - DATABASE_URL=postgres://user:password@user-db:5432/userdb
-    depends_on:
-      - user-db
-    networks:
-      - app-network
-
-  # Seu banco de dados MongoDB, agora na rede compartilhada
+  # Serviço do Banco de Dados
   db:
     image: mongo:latest
     container_name: mongo_db
     ports:
-      - "27017:27017"
+      # Expor a porta 27017 nos permite conectar com um cliente de DB (ex: Compass)
+      - "27017:27017" 
     volumes:
+      # Este volume garante que os dados sejam salvos mesmo se o contêiner parar
       - mongo-data:/data/db
-    networks:
-      - app-network
 
-  # Novo banco de dados PostgreSQL do seu amigo
-  user-db:
-    image: postgres:13-alpine
-    container_name: user-db
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=userdb
-    volumes:
-      - user_db_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
-    networks:
-      - app-network
-
-  # Seu frontend, agora na rede compartilhada
   frontend:
     build: ./frontend
     container_name: frontend_service
     volumes:
       - ./frontend/src:/app/src
-    networks:
-      - app-network
 
-  # Seu proxy Nginx, agora esperando por todos os serviços
   proxy:
     build:
       context: ./nginx
@@ -96,16 +53,7 @@ services:
       - listas-service
       - itens-service
       - frontend
-      - user_service # Adicionado
-    networks:
-      - app-network
 
-# Unificação dos volumes para os dois bancos de dados
+# Definição do volume nomeado
 volumes:
   mongo-data:
-  user_db_data:
-
-# Definição da rede compartilhada para todos os serviços
-networks:
-  app-network:
-    driver: bridge
