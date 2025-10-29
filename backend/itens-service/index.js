@@ -25,6 +25,12 @@ const ItemSchema = new mongoose.Schema({
 });
 const Item = mongoose.model('Item', ItemSchema);
 
+const LockSchema = new mongoose.Schema({
+  _id: { type: String, required: true }, // Usaremos o itemId como _id do lock
+  createdAt: { type: Date, expires: '10s', default: Date.now } // TTL: trava expira em 10s
+});
+const Lock = mongoose.model('Lock', LockSchema);
+
 app.get('/items/:listId', async (req, res) => {
   try {
     const { listId } = req.params;
@@ -80,19 +86,37 @@ io.on('connection', (socket) => {
     }
   });
 
-  // --- LÓGICA COMPLETA E CORRIGIDA PARA MARCAR/DESMARCAR ---
   socket.on('marcar_item', async ({ listId, itemId, checked }) => {
+  console.log(`[Coordenação] Tentando adquirir lock para item ${itemId} por ${socket.id}`);
+  try {
+    // --- TENTA ADQUIRIR O LOCK ---
+    await Lock.create({ _id: itemId });
+    console.log(`[Coordenação] Lock adquirido para item ${itemId} por ${socket.id}`);
+
+    // --- SE CONSEGUIU O LOCK, PROSSEGUE ---
     try {
       const itemAtualizado = await Item.findByIdAndUpdate(itemId, { checked: checked }, { new: true });
+
       if (itemAtualizado) {
         const itemParaEmitir = { id: itemAtualizado._id, nome: itemAtualizado.nome, checked: itemAtualizado.checked, listId: itemAtualizado.listId };
         io.to(listId).emit('item_atualizado', itemParaEmitir);
+        console.log(`[Coordenação] Item ${itemId} atualizado e evento emitido.`);
       }
-    } catch (error) {
-      console.error(`[BACKEND] ERRO ao marcar o item ${itemId}:`, error);
+    } finally {
+      // --- LIBERA O LOCK ---
+      await Lock.deleteOne({ _id: itemId });
+      console.log(`[Coordenação] Lock liberado para item ${itemId} por ${socket.id}`);
     }
-  });
-  // --------------------------------------------------------
+
+  } catch (error) {
+    // --- SE FALHOU EM ADQUIRIR O LOCK ---
+    if (error.code === 11000) { 
+      console.log(`[Coordenação] Falha ao adquirir lock para item ${itemId} (já bloqueado). Tentativa por ${socket.id}`);
+    } else {
+      console.error(`[Coordenação] Erro inesperado ao tentar bloquear item ${itemId}:`, error);
+    }
+  }
+});
 
   socket.on('deletar_item', async ({ listId, itemId }) => {
     try {
