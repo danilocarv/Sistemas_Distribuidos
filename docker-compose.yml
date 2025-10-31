@@ -9,7 +9,7 @@ services:
       - ./backend/listas-service:/app
       - /app/node_modules
     environment:
-      # Substitua pela sua string de conexão completa do Atlas
+      # CORRIGIDO: O "r" extra foi removido de "9pirx8u"
       - MONGO_URL=mongodb+srv://danilocarvalho2k3_db_user:W12G8N0iNJg2LoZH@clusterlistacompras.9pirx8u.mongodb.net/?appName=ClusterListaCompras
     # depends_on: db (Removido)
     # networks: app-network (Se não estiver usando, pode remover)
@@ -21,10 +21,24 @@ services:
       - ./backend/itens-service:/app
       - /app/node_modules
     environment:
-      # Substitua pela sua string de conexão completa do Atlas
+      # CORRIGIDO: O "r" extra foi removido de "9pirx8u"
       - MONGO_URL=mongodb+srv://danilocarvalho2k3_db_user:W12G8N0iNJg2LoZH@clusterlistacompras.9pirx8u.mongodb.net/?appName=ClusterListaCompras
     # depends_on: db (Removido)
     # networks: app-network (Se não estiver usando, pode remover)
+
+  # --- NOVO SERVIÇO ADICIONADO ---
+  user-service:
+    build: ./backend/user-service
+    container_name: user_service
+    volumes:
+      - ./backend/user-service:/app # Para hot-reload, igual aos outros
+      - /app/node_modules
+    environment:
+      # A MESMA string de conexão do Atlas
+  
+      - MONGO_URL=mongodb+srv://danilocarvalho2k3_db_user:W12G8N0iNJg2LoZH@clusterlistacompras.9pirx8u.mongodb.net/?appName=ClusterListaCompras
+      - JWT_SECRET=mude-este-segredo-depois-para-algo-longo
+  # --- FIM DO NOVO SERVIÇO ---
 
   frontend:
     build: ./frontend
@@ -43,6 +57,7 @@ services:
       - listas-service
       - itens-service
       - frontend
+      - user-service # <-- ADICIONADO user-service ao depends_on
     # networks: app-network (Se não estiver usando, pode remover)
 
 # volumes: (Seção inteira removida se não houver outros volumes)
