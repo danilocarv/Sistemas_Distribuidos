@@ -36,7 +36,7 @@ const ItemSchema = new mongoose.Schema({
 const Item = mongoose.models.Item || mongoose.model('Item', ItemSchema);
 // ------------------------------------
 
-app.get('/api/listas', async (req, res) => {
+app.get('/listas', async (req, res) => {
   try {
     const listasDoBanco = await Lista.find();
     const listasParaFrontend = listasDoBanco.map(lista => ({
@@ -49,7 +49,7 @@ app.get('/api/listas', async (req, res) => {
   }
 });
 
-app.post('/api/listas', async (req, res) => {
+app.post('/listas', async (req, res) => {
   const { nome } = req.body;
   if (!nome) {
     return res.status(400).json({ message: 'O nome da lista é obrigatório.' });
@@ -65,7 +65,7 @@ app.post('/api/listas', async (req, res) => {
   }
 });
 
-app.delete('/api/listas/:id', async (req, res) => {
+app.delete('/listas/:id', async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`Recebido pedido para deletar lista ${id}`);
@@ -83,7 +83,7 @@ app.delete('/api/listas/:id', async (req, res) => {
     // Passo 2: Tenta deletar os itens associados.
     // Envolvemos isso em um try...catch separado.
     try {
-      await axios.delete(`${ITENS_SERVICE_URL}/api/items/by-list/${id}`);
+      await axios.delete(`${ITENS_SERVICE_URL}/items/by-list/${id}`);
       console.log(`Pedido de exclusão de itens para a lista ${id} enviado com sucesso.`);
     } catch (itemError) {
       // Se a exclusão dos itens falhar, apenas registramos o erro no log,

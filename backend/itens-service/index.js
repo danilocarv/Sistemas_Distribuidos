@@ -31,7 +31,7 @@ const LockSchema = new mongoose.Schema({
 });
 const Lock = mongoose.model('Lock', LockSchema);
 
-app.get('/api/items/:listId', async (req, res) => {
+app.get('/items/:listId', async (req, res) => {
   try {
     const { listId } = req.params;
     const itensDoBanco = await Item.find({ listId: listId });
@@ -44,7 +44,7 @@ app.get('/api/items/:listId', async (req, res) => {
   }
 });
 
-app.delete('/api/items/by-list/:listId', async (req, res) => {
+app.delete('/items/by-list/:listId', async (req, res) => {
     try {
         const { listId } = req.params;
         const result = await Item.deleteMany({ listId: listId });
