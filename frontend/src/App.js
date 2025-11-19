@@ -4,7 +4,7 @@ import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import io from 'socket.io-client';
 import { useTheme } from './ThemeContext';
-import { FaTrash, FaMoon, FaSun, FaSignOutAlt } from 'react-icons/fa';
+import { FaTrash, FaSignOutAlt, FaSun, FaMoon } from 'react-icons/fa';
 import './App.css';
 
 /* --- CÉREBRO DA AUTENTICAÇÃO (AuthContext) --- */
@@ -82,9 +82,7 @@ function AuthProvider({ children }) {
     logout
   };
 
-  if (isLoading) {
-    return <div className="container">Carregando...</div>;
-  }
+  if (isLoading) return <div className="container">Carregando...</div>;
 
   return (
     <AuthContext.Provider value={value}>
@@ -94,6 +92,22 @@ function AuthProvider({ children }) {
 }
 
 const useAuth = () => useContext(AuthContext);
+
+/* --- NOVO BOTÃO SWITCH DE TEMA --- */
+const ThemeSwitch = () => {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <div 
+      className={`theme-switch ${theme}`} 
+      onClick={toggleTheme} 
+      title={`Mudar para tema ${theme === 'light' ? 'escuro' : 'claro'}`}
+    >
+      <div className="switch-knob">
+        {theme === 'light' ? <FaSun size={12} color="#F6E05E" /> : <FaMoon size={12} color="#4A5568" />}
+      </div>
+    </div>
+  );
+};
 
 /* --- PÁGINAS DE LOGIN/REGISTO --- */
 function LoginPage() {
@@ -114,11 +128,20 @@ function LoginPage() {
 
   return (
     <div className="auth-container">
-      <h1>Login</h1>
+      {/* Cabeçalho com Switch */}
+      <div className="auth-header">
+        <h1>Login</h1>
+        <ThemeSwitch />
+      </div>
+
       <form onSubmit={handleSubmit} className="auth-form">
         {error && <p className="error-message">{error}</p>}
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha" required />
+        <label>Email</label>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Digite seu email" required />
+        
+        <label>Senha</label>
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Digite sua senha" required />
+        
         <button type="submit">Entrar</button>
       </form>
       <p className="auth-link">Não tem uma conta? <Link to="/register">Registe-se aqui</Link></p>
@@ -149,12 +172,23 @@ function RegisterPage() {
 
   return (
     <div className="auth-container">
-      <h1>Registo</h1>
+      {/* Cabeçalho com Switch */}
+      <div className="auth-header">
+        <h1>Registo</h1>
+        <ThemeSwitch />
+      </div>
+
       <form onSubmit={handleSubmit} className="auth-form">
         {error && <p className="error-message">{error}</p>}
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" required />
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha (mín. 6 caracteres)" required />
+        <label>Nome</label>
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome completo" required />
+        
+        <label>Email</label>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu melhor email" required />
+        
+        <label>Senha</label>
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Crie uma senha (mín. 6 carateres)" required />
+        
         <button type="submit">Criar Conta</button>
       </form>
       <p className="auth-link">Já tem uma conta? <Link to="/login">Faça login</Link></p>
@@ -169,18 +203,8 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-/* --- COMPONENTES PRINCIPAIS --- */
+/* --- COMPONENTES PRINCIPAIS (Listas) --- */
 
-const ThemeToggleButton = () => {
-  const { theme, toggleTheme } = useTheme();
-  return (
-    <button className="theme-toggle-button" onClick={toggleTheme} title="Alterar Tema">
-      {theme === 'light' ? <FaMoon /> : <FaSun />}
-    </button>
-  );
-};
-
-// --- HEADER MODIFICADO ---
 const Header = ({ title, showBackButton, onBackClick }) => {
   const { logout } = useAuth();
   
@@ -190,13 +214,13 @@ const Header = ({ title, showBackButton, onBackClick }) => {
         <button className="back-button" onClick={onBackClick}>← Voltar</button>
       )}
       
-      {/* CENTRO: Título + Botão de Tema */}
+      {/* CENTRO: Título + Switch de Tema */}
       <div className="header-center">
         <h1>{title}</h1>
-        <ThemeToggleButton />
+        <ThemeSwitch />
       </div>
 
-      {/* DIREITA: Apenas Botão de Sair */}
+      {/* DIREITA: Botão de Sair */}
       <div className="header-controls">
         <button className="logout-button" onClick={logout} title="Sair">
           <FaSignOutAlt />

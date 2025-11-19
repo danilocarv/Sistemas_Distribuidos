@@ -14,6 +14,8 @@
   --checked-text-color: #a0aec0;
   --header-bg: #2d3748;
   --shadow-color: rgba(0, 0, 0, 0.05);
+  --switch-bg: #cbd5e0;
+  --switch-bg-dark: #4a5568;
 }
 
 body.dark {
@@ -52,11 +54,10 @@ ul { list-style: none; padding: 0; }
   min-height: 40px;
 }
 
-/* Grupo Central: Título + Botão Tema */
 .header-center {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 1rem; /* Espaço entre Título e Switch */
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -67,7 +68,6 @@ ul { list-style: none; padding: 0; }
   margin: 0;
 }
 
-/* Botão de Sair na direita */
 .header-controls {
   position: absolute;
   right: 0;
@@ -75,7 +75,42 @@ ul { list-style: none; padding: 0; }
   transform: translateY(-50%);
 }
 
-/* --- COMPONENTES --- */
+/* --- NOVO BOTÃO SWITCH (TEMA) --- */
+.theme-switch {
+  width: 50px;
+  height: 26px;
+  background-color: var(--switch-bg);
+  border-radius: 13px;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.theme-switch.dark {
+  background-color: var(--primary-color);
+}
+
+.switch-knob {
+  width: 22px;
+  height: 22px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.theme-switch.dark .switch-knob {
+  transform: translateX(24px);
+}
+
+/* --- COMPONENTES GERAIS --- */
 .list-item, .list-selection li {
   background-color: var(--surface-color);
   border: 1px solid var(--border-color);
@@ -123,7 +158,7 @@ form {
   margin-bottom: 2rem;
 }
 
-input[type="text"], input[type="password"], input[type="email"] {
+input {
   flex-grow: 1;
   padding: 0.75rem;
   border: 1px solid var(--border-color);
@@ -159,20 +194,6 @@ button:hover { opacity: 0.85; }
   z-index: 10;
 }
 
-.theme-toggle-button {
-  background: var(--surface-color);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  font-size: 1rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-}
-
 .logout-button {
   background: var(--danger-color);
   color: var(--primary-text-color);
@@ -180,21 +201,81 @@ button:hover { opacity: 0.85; }
   font-size: 0.9rem;
 }
 
-/* --- AUTH STYLES --- */
+/* --- ESTILOS DE LOGIN/REGISTO (MODERNOS) --- */
 .auth-container {
-  max-width: 450px;
-  margin: 4rem auto;
-  padding: 2rem;
+  max-width: 420px;
+  margin: 6rem auto;
+  padding: 2.5rem;
   background-color: var(--surface-color);
-  border-radius: 8px;
-  box-shadow: 0 10px 15px -3px var(--shadow-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px var(--shadow-color);
 }
-.auth-container h1 { font-size: 2rem; margin-bottom: 2rem; text-align: center; }
-.auth-form { display: flex; flex-direction: column; gap: 1.5rem; padding: 0; box-shadow: none; background: transparent; margin-bottom: 0; }
-.auth-form button { width: 100%; }
-.auth-link { margin-top: 1.5rem; text-align: center; color: var(--subtle-text-color); }
-.auth-link a { color: var(--primary-color); text-decoration: none; font-weight: 500; }
-.auth-link a:hover { text-decoration: underline; }
+
+.auth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.auth-header h1 {
+  font-size: 2rem;
+  margin: 0;
+  color: var(--text-color);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+  margin-bottom: 1rem;
+}
+
+.auth-form label {
+  text-align: left;
+  font-weight: 500;
+  color: var(--subtle-text-color);
+  font-size: 0.9rem;
+  margin-bottom: -0.5rem;
+}
+
+.auth-form input {
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  transition: border-color 0.2s;
+}
+
+.auth-form input:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+.auth-form button {
+  width: 100%;
+  margin-top: 1rem;
+  font-size: 1.1rem;
+}
+
+.auth-link {
+  margin-top: 1.5rem;
+  text-align: center;
+  color: var(--subtle-text-color);
+  font-size: 0.95rem;
+}
+
+.auth-link a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.auth-link a:hover {
+  text-decoration: underline;
+}
+
 .error-message {
   color: var(--danger-color);
   background-color: rgba(229, 62, 62, 0.1);
