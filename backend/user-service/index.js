@@ -6,7 +6,10 @@ const cors = require('cors');
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // Permite requisições de outras origens
+app.use(cors({
+  origin: '*', 
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 const PORT = 3000; // A porta é fixa em 3000, como definido no Nginx/Docker
 const MONGO_URL = process.env.MONGO_URL; // VEM DO DOCKER-COMPOSE.YML

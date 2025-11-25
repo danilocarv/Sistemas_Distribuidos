@@ -1,18 +1,25 @@
-// backend/listas-service/index.js
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const mongoose = require('mongoose');
 const axios = require('axios');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+// --- CORREÇÃO DE CORS ---
+// Permite que o Frontend (localhost ou nuvem) faça requisições
+app.use(cors({
+  origin: '*', 
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 const server = http.createServer(app);
 const PORT = 3001;
 const MONGO_URL = process.env.MONGO_URL;
-
-const ITENS_SERVICE_URL = 'http://itens-service:3002';
+const JWT_SECRET = process.env.JWT_SECRET || "segredo_padrao_inseguro";
+const ITENS_SERVICE_URL = process.env.ITENS_SERVICE_ENDPOINT || 'http://itens-service:3002';
 
 mongoose.connect(MONGO_URL)
   .then(() => console.log('Listas-service conectado ao MongoDB.'))
@@ -20,25 +27,41 @@ mongoose.connect(MONGO_URL)
 
 const ListaSchema = new mongoose.Schema({
   _id: { type: String, required: true },
-  nome: { type: String, required: true }
+  nome: { type: String, required: true },
+  ownerId: { type: String, required: true }
 });
 const Lista = mongoose.model('Lista', ListaSchema);
 
-const ItemSchema = new mongoose.Schema({
-  _id: { type: String, required: true },
-  nome: { type: String, required: true },
-  checked: { type: Boolean, default: false },
-  listId: { type: String, required: true, index: true }
-});
+// --- MIDDLEWARE DE SEGURANÇA ---
+const verificarToken = (req, res, next) => {
+  const tokenHeader = req.headers['authorization'];
+  
+  // Logs para debug (pode remover depois se quiser)
+  console.log(`[AUTH] Verificando rota: ${req.method} ${req.originalUrl}`);
 
-// --- A CORREÇÃO ESTÁ NESTA LINHA ---
-// Verifica se o modelo 'Item' já existe antes de tentar criá-lo.
-const Item = mongoose.models.Item || mongoose.model('Item', ItemSchema);
-// ------------------------------------
+  if (!tokenHeader) {
+    console.log("[AUTH] Erro: Sem token.");
+    return res.status(401).json({ message: 'Acesso negado. Token não fornecido.' });
+  }
 
-app.get('/listas', async (req, res) => {
+  const token = tokenHeader.startsWith('Bearer ') ? tokenHeader.slice(7, tokenHeader.length) : tokenHeader;
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) {
+      console.log("[AUTH] Erro: Token inválido.");
+      return res.status(403).json({ message: 'Token inválido.' });
+    }
+    req.userId = decoded.id;
+    next();
+  });
+};
+
+// --- ROTAS (AGORA PADRONIZADAS PARA 'lists' EM INGLÊS) ---
+
+// 1. GET /api/lists
+app.get('/api/lists', verificarToken, async (req, res) => {
   try {
-    const listasDoBanco = await Lista.find();
+    const listasDoBanco = await Lista.find({ ownerId: req.userId });
     const listasParaFrontend = listasDoBanco.map(lista => ({
       id: lista._id,
       nome: lista.nome
@@ -49,53 +72,47 @@ app.get('/listas', async (req, res) => {
   }
 });
 
-app.post('/listas', async (req, res) => {
+// 2. POST /api/lists
+app.post('/api/lists', verificarToken, async (req, res) => {
+  console.log("[API] Recebido pedido de criação de lista"); // Log para confirmar que chegou
   const { nome } = req.body;
   if (!nome) {
     return res.status(400).json({ message: 'O nome da lista é obrigatório.' });
   }
   try {
     const newListId = new Date().getTime().toString();
-    const novaLista = new Lista({ _id: newListId, nome });
+    const novaLista = new Lista({ _id: newListId, nome, ownerId: req.userId });
     await novaLista.save();
-    console.log(`Lista criada: ${nome} (ID: ${newListId})`);
+    console.log(`[API] Lista criada: ${nome} (ID: ${newListId})`);
     res.status(201).json({ id: novaLista._id, nome: novaLista.nome });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Erro ao criar lista.' });
   }
 });
 
-app.delete('/listas/:id', async (req, res) => {
+// 3. DELETE /api/lists/:id
+app.delete('/api/lists/:id', verificarToken, async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`Recebido pedido para deletar lista ${id}`);
-
-    // Passo 1: Deleta a lista do banco de dados.
-    const listaDeletada = await Lista.findByIdAndDelete(id);
-
-    if (!listaDeletada) {
-      // Se a lista nem existia, retorna um erro 404.
-      return res.status(404).json({ message: 'Lista não encontrada.' });
+    const lista = await Lista.findOne({ _id: id, ownerId: req.userId });
+    
+    if (!lista) {
+      return res.status(404).json({ message: 'Lista não encontrada ou sem permissão.' });
     }
 
-    console.log(`Lista ${id} deletada com sucesso do DB.`);
-
-    // Passo 2: Tenta deletar os itens associados.
-    // Envolvemos isso em um try...catch separado.
     try {
-      await axios.delete(`${ITENS_SERVICE_URL}/items/by-list/${id}`);
-      console.log(`Pedido de exclusão de itens para a lista ${id} enviado com sucesso.`);
+      // Atualize o endpoint do itens-service se necessário
+      await axios.delete(`${ITENS_SERVICE_URL}/api/items/by-list/${id}`);
     } catch (itemError) {
-      // Se a exclusão dos itens falhar, apenas registramos o erro no log,
-      // mas não consideramos a operação inteira um fracasso.
-      console.error(`AVISO: A lista ${id} foi deletada, mas a exclusão dos itens falhou:`, itemError.message);
+      console.error(`AVISO: Falha ao deletar itens:`, itemError.message);
     }
 
-    // Envia uma resposta de sucesso para o frontend, pois a operação principal funcionou.
+    await Lista.findByIdAndDelete(id);
     res.status(200).json({ message: 'Lista deletada com sucesso.' });
 
   } catch (error) {
-    console.error(`Erro GERAL ao deletar lista:`, error);
+    console.error(`Erro ao deletar lista:`, error);
     res.status(500).json({ message: 'Erro ao deletar a lista.' });
   }
 });
