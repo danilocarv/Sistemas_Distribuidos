@@ -7,7 +7,7 @@ import { useTheme } from './ThemeContext';
 import { FaTrash, FaSignOutAlt, FaSun, FaMoon } from 'react-icons/fa';
 import './App.css';
 
-/* --- AUTH CONTEXT --- */
+/* --- CÉREBRO DA AUTENTICAÇÃO --- */
 const AuthContext = createContext();
 
 function AuthProvider({ children }) {
@@ -20,6 +20,7 @@ function AuthProvider({ children }) {
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
+
     if (storedToken && storedUser) {
       setUser(JSON.parse(storedUser));
       setToken(storedToken);
@@ -28,63 +29,55 @@ function AuthProvider({ children }) {
     setIsLoading(false);
   }, []);
 
+  // CONEXÃO DO SOCKET COM TOKEN
   useEffect(() => {
     if (token) {
-      // Conecta ao socket na raiz (o Nginx roteia para /socket.io)
-      const newSocket = io('/', { 
-        auth: { token },
-        transports: ['websocket', 'polling']
+      const newSocket = io({
+        auth: { token }
       });
       setSocket(newSocket);
-      return () => newSocket.disconnect();
+      return () => {
+        newSocket.disconnect();
+      };
     } else {
       setSocket(null);
     }
   }, [token]);
 
   const login = async (email, password) => {
-    try {
-      const response = await axios.post('/api/auth/login', { email, password });
-      const { user, token } = response.data;
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
-      setToken(token);
-      navigate('/');
-    } catch (error) {
-      console.error("Erro no login:", error);
-      throw error;
-    }
+    const response = await axios.post('/api/auth/login', { email, password });
+    const { user, token } = response.data;
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('token', token);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setUser(user);
+    setToken(token);
+    navigate('/');
   };
 
   const register = async (name, email, password) => {
-    try {
-      await axios.post('/api/auth/register', { name, email, password });
-      navigate('/login');
-    } catch (error) {
-      console.error("Erro no registro:", error);
-      throw error;
-    }
+    await axios.post('/api/auth/register', { name, email, password });
+    navigate('/login');
   };
 
   const logout = () => {
-    localStorage.clear(); // Limpa tudo
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
     setToken(null);
-    if (socket) socket.disconnect();
     navigate('/login');
   };
 
   const value = { user, token, socket, isAuthenticated: !!token, isLoading, login, register, logout };
-  if (isLoading) return <div>Carregando...</div>;
+
+  if (isLoading) return <div className="container">Carregando...</div>;
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 const useAuth = () => useContext(AuthContext);
 
-/* --- TEMA --- */
+/* --- COMPONENTES VISUAIS --- */
 const ThemeSwitch = () => {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -96,31 +89,24 @@ const ThemeSwitch = () => {
   );
 };
 
-/* --- PÁGINAS DE LOGIN / REGISTRO --- */
 function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
   const { login } = useAuth();
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
-    try { await login(email, password); } 
-    catch (err) { setError('Falha ao logar. Verifique suas credenciais.'); }
+    try { await login(email, password); } catch (err) { alert('Falha no login'); }
   };
-
   return (
-    <div className="auth-container">
+    <div className="auth-wrapper"><div className="auth-container">
       <div className="auth-header"><h1>Login</h1><ThemeSwitch /></div>
       <form onSubmit={handleSubmit} className="auth-form">
-        {error && <p className="error-message">{error}</p>}
         <label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
         <label>Senha</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
         <button type="submit">Entrar</button>
       </form>
-      <p className="auth-link">Não tem conta? <Link to="/register">Registre-se</Link></p>
-    </div>
+      <p className="auth-link">Sem conta? <Link to="/register">Registre-se</Link></p>
+    </div></div>
   );
 }
 
@@ -129,221 +115,166 @@ function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { register } = useAuth();
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try { await register(name, email, password); alert('Conta criada! Faça login.'); }
-    catch (err) { alert('Erro ao registrar. Tente outro email.'); }
+    try { await register(name, email, password); } catch (err) { alert('Falha no registro'); }
   };
-
   return (
-    <div className="auth-container">
+    <div className="auth-wrapper"><div className="auth-container">
       <div className="auth-header"><h1>Registro</h1><ThemeSwitch /></div>
       <form onSubmit={handleSubmit} className="auth-form">
         <label>Nome</label><input type="text" value={name} onChange={e => setName(e.target.value)} required />
         <label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
         <label>Senha</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-        <button type="submit">Criar</button>
+        <button type="submit">Criar Conta</button>
       </form>
-      <p className="auth-link"><Link to="/login">Voltar</Link></p>
-    </div>
+      <p className="auth-link">Já tem conta? <Link to="/login">Faça login</Link></p>
+    </div></div>
   );
 }
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? children : <Navigate to="/login" />;
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <div>Carregando...</div>;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return children;
 }
 
-/* --- HEADER --- */
 const Header = ({ title, showBackButton, onBackClick }) => {
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
   return (
     <div className="header">
       {showBackButton && <button className="back-button" onClick={onBackClick}>← Voltar</button>}
       <div className="header-center"><h1>{title}</h1><ThemeSwitch /></div>
-      <div className="header-controls">
-        <span style={{ marginRight: 10, fontSize: '0.9rem' }}>{user?.name}</span>
-        <button className="logout-button" onClick={logout} title="Sair"><FaSignOutAlt /></button>
-      </div>
+      <div className="header-controls"><button className="logout-button" onClick={logout}><FaSignOutAlt /></button></div>
     </div>
   );
 };
 
-/* --- LISTAS E ITENS --- */
 function MainListPage() {
-  const { socket } = useAuth();
+  const { socket } = useAuth(); 
   const [listas, setListas] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [itens, setItens] = useState([]);
   const [newItemName, setNewItemName] = useState('');
   const [newListName, setNewListName] = useState('');
 
-  // Busca as listas do usuário ao carregar
+  // Busca inicial
   useEffect(() => {
-    axios.get('/api/lists/') // ATENÇÃO: /api/lists/ (em inglês)
-      .then(res => setListas(res.data))
-      .catch(err => {
-        console.error("Erro ao buscar listas:", err);
-        if (err.response?.status === 403 || err.response?.status === 401) {
-            alert("Sessão inválida. Faça login novamente.");
-            window.location.href = '/login';
-        }
-      });
-  }, []);
-
-  // Configura os ouvintes do Socket.IO
+    if (socket) axios.get('/api/lists/').then(res => setListas(res.data)).catch(console.error);
+  }, [socket]);
+  
+  // LISTENERS DO SOCKET (AQUI ESTÁ A SINCRONIZAÇÃO)
   useEffect(() => {
     if (!socket) return;
 
-    // Handlers simplificados (confia no backend)
-    const handleItemAdd = (item) => {
-        console.log("Item recebido:", item);
-        setItens(prev => [...prev, item]);
-    };
-    const handleItemUpdate = (item) => setItens(prev => prev.map(i => i.id === item.id ? item : i));
-    const handleItemDelete = ({ itemId }) => setItens(prev => prev.filter(i => i.id !== itemId));
+    // Se tiver uma lista aberta, garante que entra na sala dela
+    if (selectedList) {
+        socket.emit('entrar_lista', selectedList.id);
+    }
     
-    const handleListAdd = (lista) => setListas(prev => [...prev, lista]);
-    const handleListDel = ({ id }) => setListas(prev => prev.filter(l => l.id !== id));
-
-    socket.on('item_adicionado', handleItemAdd);
-    socket.on('item_atualizado', handleItemUpdate);
-    socket.on('item_deletado', handleItemDelete);
-    socket.on('nova_lista_para_todos', handleListAdd);
-    socket.on('lista_removida_de_todos', handleListDel);
+    const handleNovaLista = (lista) => setListas(prev => [...prev, lista]);
+    const handleListaRemovida = ({ id }) => setListas(prev => prev.filter(l => l.id !== id));
+    
+    const handleItemAdicionado = (novoItem) => {
+      // Só adiciona se estiver na mesma lista
+      if (selectedList && novoItem.listId === selectedList.id) setItens(prev => [...prev, novoItem]);
+    };
+    const handleItemAtualizado = (item) => {
+      if (selectedList && item.listId === selectedList.id) setItens(prev => prev.map(i => i.id === item.id ? item : i));
+    };
+    const handleItemDeletado = ({ itemId }) => {
+        setItens(prev => prev.filter(i => i.id !== itemId));
+    };
+    
+    socket.on('item_adicionado', handleItemAdicionado);
+    socket.on('item_atualizado', handleItemAtualizado);
+    socket.on('item_deletado', handleItemDeletado);
+    socket.on('nova_lista_para_todos', handleNovaLista);
+    socket.on('lista_removida_de_todos', handleListaRemovida);
 
     return () => {
-        socket.off('item_adicionado', handleItemAdd);
-        socket.off('item_atualizado', handleItemUpdate);
-        socket.off('item_deletado', handleItemDelete);
-        socket.off('nova_lista_para_todos', handleListAdd);
-        socket.off('lista_removida_de_todos', handleListDel);
+      socket.off('item_adicionado');
+      socket.off('item_atualizado');
+      socket.off('item_deletado');
+      socket.off('nova_lista_para_todos');
+      socket.off('lista_removida_de_todos');
     };
-  }, [socket]);
+  }, [selectedList, socket]);
 
-  // Selecionar uma lista
   const handleSelectList = (lista) => {
-    setItens([]); // Limpa a tela anterior
     setSelectedList(lista);
-    socket.emit('entrar_lista', lista.id); // Entra na sala
-    
-    // Busca os itens dessa lista
-    axios.get(`/api/items/${lista.id}`)
-        .then(res => setItens(res.data))
-        .catch(err => console.error(err));
+    socket.emit('entrar_lista', lista.id);
+    axios.get(`/api/items/${lista.id}`).then(res => setItens(res.data));
   };
 
-  // Voltar para a seleção de listas
-  const handleBack = () => {
-    if (socket && selectedList) {
-        socket.emit('sair_lista', selectedList.id); // Sai da sala
-    }
-    setSelectedList(null);
-    setItens([]);
-  };
-
-  // Criar nova lista
-  const handleCreateList = async (e) => {
-    e.preventDefault();
-    if (!newListName.trim()) return;
-    try {
-        const res = await axios.post('/api/lists/', { nome: newListName });
-        setListas(prev => [...prev, res.data]);
-        setNewListName('');
-    } catch (err) {
-        alert("Erro ao criar lista.");
-    }
-  };
-
-  // Apagar lista
-  const handleDeleteList = async (e, id) => {
-    e.stopPropagation();
-    if (!window.confirm("Tem certeza? Isso apagará todos os itens.")) return;
-    try {
-        await axios.delete(`/api/lists/${id}`);
-        setListas(prev => prev.filter(l => l.id !== id));
-    } catch (err) {
-        alert("Erro ao apagar lista.");
-    }
-  };
-
-  // Adicionar Item
   const handleAddItem = (e) => {
     e.preventDefault();
-    if (!newItemName.trim()) return;
+    if (!newItemName.trim() || !selectedList) return;
     socket.emit('adicionar_item', { listId: selectedList.id, nomeItem: newItemName });
     setNewItemName('');
   };
 
-  // Marcar/Desmarcar Item
-  const handleToggleItem = (item) => {
-    socket.emit('marcar_item', { listId: selectedList.id, itemId: item.id, checked: !item.checked });
-  };
-
-  // Deletar Item
   const handleDeleteItem = (e, itemId) => {
     e.stopPropagation();
     socket.emit('deletar_item', { listId: selectedList.id, itemId });
   };
 
-  // --- RENDERIZAÇÃO ---
+  const handleCreateList = async (e) => {
+    e.preventDefault();
+    if (newListName.trim()) {
+        const res = await axios.post('/api/lists/', { nome: newListName });
+        setNewListName('');
+        socket.emit('lista_criada', res.data);
+        setListas(prev => [...prev, res.data]);
+    }
+  };
   
-  // Tela de Seleção de Listas
+  const handleDeleteList = async (e, listId) => {
+    e.stopPropagation();
+    await axios.delete(`/api/lists/${listId}`);
+    socket.emit('lista_deletada', { listId });
+    setListas(prev => prev.filter(l => l.id !== listId));
+  };
+
+  const handleToggleItem = (item) => {
+    socket.emit('marcar_item', { listId: selectedList.id, itemId: item.id, checked: !item.checked });
+  };
+
   if (!selectedList) {
     return (
-      <div className="container">
+      <div className="App"><div className="container">
         <Header title="Minhas Listas" showBackButton={false} />
-        <ul className="list-selection">
-          {listas.length === 0 ? (
-              <p style={{textAlign: 'center', color: '#888', marginTop: 20}}>Nenhuma lista encontrada. Crie uma abaixo!</p>
-          ) : (
-              listas.map(lista => (
-                <li key={lista.id} onClick={() => handleSelectList(lista)}>
-                  <span>{lista.nome}</span>
-                  <button className="delete-btn" onClick={(e) => handleDeleteList(e, lista.id)}><FaTrash /></button>
-                </li>
-              ))
-          )}
-        </ul>
+        <ul className="list-selection">{listas.map(l => (
+          <li key={l.id} onClick={() => handleSelectList(l)}><span>{l.nome}</span><button className="delete-btn" onClick={e => handleDeleteList(e, l.id)}><FaTrash /></button></li>
+        ))}</ul>
         <form onSubmit={handleCreateList} className="new-list-form">
-          <input value={newListName} onChange={e => setNewListName(e.target.value)} placeholder="Nome da nova lista..." />
+          <input type="text" value={newListName} onChange={e => setNewListName(e.target.value)} placeholder="Nome da nova lista" />
           <button type="submit">Criar</button>
         </form>
-      </div>
+      </div></div>
     );
   }
 
-  // Tela de Itens da Lista
   return (
-    <div className="container">
-      <Header title={selectedList.nome} showBackButton={true} onBackClick={handleBack} />
+    <div className="App"><div className="container">
+      <Header title={selectedList.nome} showBackButton={true} onBackClick={() => setSelectedList(null)} />
       <form onSubmit={handleAddItem} className="add-item-form">
-        <input value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Novo item..." autoFocus />
-        <button type="submit">Adicionar</button>
+        <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Novo item" />
+        <button type="submit">Add</button>
       </form>
-      <ul className="item-list">
-        {itens.map(item => (
-          <li key={item.id} onClick={() => handleToggleItem(item)} className={`list-item ${item.checked ? 'checked' : ''}`}>
-            <span>{item.nome}</span>
-            <button className="delete-btn" onClick={(e) => handleDeleteItem(e, item.id)}><FaTrash /></button>
-          </li>
-        ))}
-      </ul>
-    </div>
+      <ul className="item-list">{itens.map(i => (
+        <li key={i.id} onClick={() => handleToggleItem(i)} className={`list-item ${i.checked ? 'checked' : ''}`}>
+          <span>{i.nome}</span>
+          <button className="delete-btn" onClick={e => handleDeleteItem(e, i.id)}><FaTrash /></button>
+        </li>
+      ))}</ul>
+    </div></div>
   );
 }
 
 function App() {
-  return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/*" element={<ProtectedRoute><MainListPage /></ProtectedRoute>} />
-      </Routes>
-    </AuthProvider>
-  );
+  return <AuthProvider><Routes><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/*" element={<ProtectedRoute><MainListPage /></ProtectedRoute>} /></Routes></AuthProvider>;
 }
 
 export default App;

@@ -1,151 +1,153 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
-// 1. CORS PERMISSIVO
-app.use(cors({
-  origin: '*', 
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
+// --- CONFIGURAÇÃO DO SOCKET.IO ---
 const server = http.createServer(app);
-const io = new Server(server, { 
-  cors: { origin: "*", methods: ["GET", "POST"] } 
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "DELETE", "PUT"]
+  }
 });
 
 const PORT = 3002;
 const MONGO_URL = process.env.MONGO_URL;
 const JWT_SECRET = process.env.JWT_SECRET || "segredo_padrao_inseguro";
 
+// --- Conexão com MongoDB ---
 mongoose.connect(MONGO_URL)
   .then(() => console.log('Itens-service conectado ao MongoDB.'))
   .catch(err => console.error('Erro ao conectar ao MongoDB:', err));
-  
+
+// --- Modelo do Item ---
 const ItemSchema = new mongoose.Schema({
-  _id: { type: String, required: true },
+  listId: { type: String, required: true },
   nome: { type: String, required: true },
-  checked: { type: Boolean, default: false },
-  listId: { type: String, required: true, index: true }
+  checked: { type: Boolean, default: false }
 });
 const Item = mongoose.model('Item', ItemSchema);
 
-const LockSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, 
-  createdAt: { type: Date, expires: '10s', default: Date.now } 
-});
-const Lock = mongoose.model('Lock', LockSchema);
-
-// 2. MIDDLEWARE DE SEGURANÇA
-const verificarToken = (req, res, next) => {
-  const tokenHeader = req.headers['authorization'];
-  if (!tokenHeader) return res.status(401).json({ message: 'Sem token.' });
-  const token = tokenHeader.startsWith('Bearer ') ? tokenHeader.slice(7) : tokenHeader;
+// --- Middleware de Autenticação para Socket.IO ---
+// Isso permite saber QUEM está conectado
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    console.log("Aviso: Conexão socket sem token.");
+    return next(); 
+  }
+  
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ message: 'Token inválido.' });
-    req.userId = decoded.id;
+    if (err) return next(new Error("Token inválido"));
+    socket.userId = decoded.id;
     next();
   });
-};
+});
 
-// 3. ROTAS HTTP (COM /api/items)
-app.get('/api/items/:listId', verificarToken, async (req, res) => {
+// --- Lógica do Tempo Real ---
+io.on('connection', (socket) => {
+  console.log(`Cliente conectado: ${socket.id}`);
+
+  // IMPORTANTE: Entrar na sala da lista específica
+  socket.on('entrar_lista', (listId) => {
+    socket.join(listId);
+    console.log(`Socket ${socket.id} entrou na sala ${listId}`);
+  });
+
+  // Adicionar Item
+  socket.on('adicionar_item', async (data) => {
+    try {
+      const novoItem = new Item({
+        listId: data.listId,
+        nome: data.nomeItem,
+        checked: false
+      });
+      await novoItem.save();
+      
+      // Envia para TODOS na sala da lista (incluindo quem enviou)
+      io.to(data.listId).emit('item_adicionado', {
+        id: novoItem._id,
+        listId: novoItem.listId,
+        nome: novoItem.nome,
+        checked: novoItem.checked
+      });
+    } catch (error) {
+      console.error("Erro ao adicionar item:", error);
+    }
+  });
+
+  // Deletar Item
+  socket.on('deletar_item', async (data) => {
+    try {
+      await Item.findByIdAndDelete(data.itemId);
+      // Avisa todos na sala que o item sumiu
+      io.to(data.listId).emit('item_deletado', data);
+    } catch (error) {
+      console.error("Erro ao deletar item:", error);
+    }
+  });
+
+  // Marcar Item
+  socket.on('marcar_item', async (data) => {
+    try {
+      await Item.findByIdAndUpdate(data.itemId, { checked: data.checked });
+      io.to(data.listId).emit('item_atualizado', {
+        id: data.itemId,
+        listId: data.listId,
+        checked: data.checked
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar item:", error);
+    }
+  });
+
+  // --- EVENTOS GLOBAIS DE LISTA ---
+  socket.on('lista_criada', (novaLista) => {
+    socket.broadcast.emit('nova_lista_para_todos', novaLista);
+  });
+
+  socket.on('lista_deletada', (data) => {
+    socket.broadcast.emit('lista_removida_de_todos', data);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Cliente desconectado:', socket.id);
+  });
+});
+
+// --- Rotas HTTP ---
+app.get('/api/items/:listId', async (req, res) => {
   try {
-    const { listId } = req.params;
-    const itens = await Item.find({ listId: listId });
-    // Mapeia para o formato que o frontend espera
+    const itens = await Item.find({ listId: req.params.listId });
     const itensFormatados = itens.map(i => ({
       id: i._id,
+      listId: i.listId,
       nome: i.nome,
-      checked: i.checked,
-      listId: i.listId
+      checked: i.checked
     }));
     res.json(itensFormatados);
   } catch (error) {
-    res.status(500).json({ message: 'Erro ao buscar itens.' });
+    res.status(500).json({ error: 'Erro ao buscar itens' });
   }
 });
 
 app.delete('/api/items/by-list/:listId', async (req, res) => {
-    try {
-        const { listId } = req.params;
-        await Item.deleteMany({ listId: listId });
-        res.status(200).json({ message: `Itens deletados.` });
-    } catch (error) {
-        res.status(500).json({ message: 'Erro ao deletar itens.' });
-    }
+  try {
+    await Item.deleteMany({ listId: req.params.listId });
+    res.status(200).send('Itens deletados');
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao deletar itens' });
+  }
 });
 
-// 4. SOCKET.IO (SIMPLIFICADO)
-io.on('connection', (socket) => {
-  console.log(`[Socket] Conectado: ${socket.id}`);
-
-  socket.on('entrar_lista', (listId) => {
-    socket.join(listId);
-    console.log(`[Socket] ${socket.id} entrou na lista ${listId}`);
-  });
-
-  socket.on('sair_lista', (listId) => {
-    socket.leave(listId);
-    console.log(`[Socket] ${socket.id} saiu da lista ${listId}`);
-  });
-
-  // Adicionar item
-  socket.on('adicionar_item', async ({ listId, nomeItem }) => {
-    try {
-      const newItemId = new Date().getTime().toString();
-      const item = new Item({ _id: newItemId, nome: nomeItem, listId: listId });
-      await item.save();
-      
-      const itemParaEmitir = { 
-          id: item._id, 
-          nome: item.nome, 
-          checked: item.checked, 
-          listId: item.listId 
-      };
-      
-      // Envia para TODOS na sala da lista
-      io.to(listId).emit('item_adicionado', itemParaEmitir);
-      console.log(`[Socket] Item enviado para sala ${listId}`);
-    } catch (error) {
-      console.error('[Erro] Falha ao adicionar item:', error);
-    }
-  });
-
-  // Marcar item (com Lock)
-  socket.on('marcar_item', async ({ listId, itemId, checked }) => {
-    try {
-      await Lock.create({ _id: itemId }); // Tenta bloquear
-      
-      // MODO DEMONSTRAÇÃO (Descomente para a apresentação)
-      // await new Promise(resolve => setTimeout(resolve, 5000));
-
-      try {
-        const item = await Item.findByIdAndUpdate(itemId, { checked: checked }, { new: true });
-        if (item) {
-          const itemFormatado = { id: item._id, nome: item.nome, checked: item.checked, listId: item.listId };
-          io.to(listId).emit('item_atualizado', itemFormatado);
-        }
-      } finally {
-        await Lock.deleteOne({ _id: itemId }); // Libera
-      }
-    } catch (error) {
-      if (error.code !== 11000) console.error('Erro no lock:', error);
-    }
-  });
-
-  // Deletar item
-  socket.on('deletar_item', async ({ listId, itemId }) => {
-      await Item.findByIdAndDelete(itemId);
-      io.to(listId).emit('item_deletado', { listId, itemId });
-  });
-});
-
+// IMPORTANTE: server.listen em vez de app.listen
 server.listen(PORT, () => {
   console.log(`Serviço de Itens rodando na porta ${PORT}`);
 });
