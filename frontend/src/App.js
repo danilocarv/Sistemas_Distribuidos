@@ -196,14 +196,12 @@ function MainListPage() {
   useEffect(() => {
     if (!socket) return;
 
-    // Handlers simplificados (confia no backend)
-    const handleItemAdd = (item) => {
-        console.log("Item recebido:", item);
-        setItens(prev => [...prev, item]);
-    };
+    // Handlers
+    const handleItemAdd = (item) => setItens(prev => [...prev, item]); // Pode ser simples assim agora
     const handleItemUpdate = (item) => setItens(prev => prev.map(i => i.id === item.id ? item : i));
     const handleItemDelete = ({ itemId }) => setItens(prev => prev.filter(i => i.id !== itemId));
     
+    // Como removemos o setListas manual, podemos confiar cegamente no socket
     const handleListAdd = (lista) => setListas(prev => [...prev, lista]);
     const handleListDel = ({ id }) => setListas(prev => prev.filter(l => l.id !== id));
 
@@ -248,8 +246,14 @@ function MainListPage() {
     e.preventDefault();
     if (!newListName.trim()) return;
     try {
-        const res = await axios.post('/api/lists/', { nome: newListName });
-        setListas(prev => [...prev, res.data]);
+        // Envia o pedido para o backend
+        await axios.post('/api/lists/', { nome: newListName });
+        
+        // --- REMOVA ESTA LINHA ---
+        // setListas(prev => [...prev, res.data]); 
+        // -------------------------
+
+        // Apenas limpe o input. O Socket vai avisar e a lista vai aparecer sozinha.
         setNewListName('');
     } catch (err) {
         alert("Erro ao criar lista.");
@@ -262,7 +266,11 @@ function MainListPage() {
     if (!window.confirm("Tem certeza? Isso apagará todos os itens.")) return;
     try {
         await axios.delete(`/api/lists/${id}`);
-        setListas(prev => prev.filter(l => l.id !== id));
+        
+        // --- REMOVA ESTA LINHA ---
+        // setListas(prev => prev.filter(l => l.id !== id));
+        // -------------------------
+        
     } catch (err) {
         alert("Erro ao apagar lista.");
     }

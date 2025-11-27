@@ -52,13 +52,21 @@ services:
     # stdin_open: true # Útil se o container do React fechar sozinho
 
   # --- NGINX (GATEWAY / PROXY REVERSO) ---
+  # --- NGINX (GATEWAY / PROXY REVERSO) ---
   proxy:
     build:
       context: ./nginx
     container_name: nginx_proxy
     restart: always
     ports:
-      - "80:80"
+      - "80:80"   # HTTP (vai redirecionar)
+      - "443:443" # HTTPS (Seguro)
+    volumes:
+      # Monta a pasta certs criada no passo 1 para dentro do container
+      - ./certs/nginx-selfsigned.crt:/etc/nginx/certs/nginx-selfsigned.crt
+      - ./certs/nginx-selfsigned.key:/etc/nginx/certs/nginx-selfsigned.key
+      # Configuração
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - listas-service
       - itens-service

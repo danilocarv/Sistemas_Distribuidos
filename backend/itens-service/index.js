@@ -146,6 +146,26 @@ io.on('connection', (socket) => {
   });
 });
 
+// --- ROTAS INTERNAS PARA NOTIFICAÇÃO (CHAMADAS PELO LISTAS-SERVICE) ---
+
+// Rota para avisar que uma lista foi criada
+app.post('/internal/notify/list-created', (req, res) => {
+  const lista = req.body;
+  // Emite para TODOS os sockets conectados
+  io.emit('nova_lista_para_todos', lista);
+  console.log(`[Socket] Notificação de nova lista enviada: ${lista.nome}`);
+  res.sendStatus(200);
+});
+
+// Rota para avisar que uma lista foi deletada
+app.post('/internal/notify/list-deleted', (req, res) => {
+  const { id } = req.body;
+  // Emite para TODOS os sockets conectados
+  io.emit('lista_removida_de_todos', { id });
+  console.log(`[Socket] Notificação de lista removida enviada: ${id}`);
+  res.sendStatus(200);
+});
+
 server.listen(PORT, () => {
   console.log(`Serviço de Itens rodando na porta ${PORT}`);
 });
