@@ -7,7 +7,7 @@ import { useTheme } from './ThemeContext';
 import { FaTrash, FaSignOutAlt, FaSun, FaMoon } from 'react-icons/fa';
 import './App.css';
 
-/* --- CÉREBRO DA AUTENTICAÇÃO --- */
+/* --- AUTH CONTEXT --- */
 const AuthContext = createContext();
 
 function AuthProvider({ children }) {
@@ -20,7 +20,6 @@ function AuthProvider({ children }) {
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-
     if (storedToken && storedUser) {
       setUser(JSON.parse(storedUser));
       setToken(storedToken);
@@ -29,55 +28,63 @@ function AuthProvider({ children }) {
     setIsLoading(false);
   }, []);
 
-  // CONEXÃO DO SOCKET COM TOKEN
   useEffect(() => {
     if (token) {
-      const newSocket = io({
-        auth: { token }
+      // Conecta ao socket na raiz (o Nginx roteia para /socket.io)
+      const newSocket = io('/', { 
+        auth: { token },
+        transports: ['websocket', 'polling']
       });
       setSocket(newSocket);
-      return () => {
-        newSocket.disconnect();
-      };
+      return () => newSocket.disconnect();
     } else {
       setSocket(null);
     }
   }, [token]);
 
   const login = async (email, password) => {
-    const response = await axios.post('/api/auth/login', { email, password });
-    const { user, token } = response.data;
-    localStorage.setItem('user', JSON.stringify(user));
-    localStorage.setItem('token', token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setUser(user);
-    setToken(token);
-    navigate('/');
+    try {
+      const response = await axios.post('/api/auth/login', { email, password });
+      const { user, token } = response.data;
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setUser(user);
+      setToken(token);
+      navigate('/');
+    } catch (error) {
+      console.error("Erro no login:", error);
+      throw error;
+    }
   };
 
   const register = async (name, email, password) => {
-    await axios.post('/api/auth/register', { name, email, password });
-    navigate('/login');
+    try {
+      await axios.post('/api/auth/register', { name, email, password });
+      navigate('/login');
+    } catch (error) {
+      console.error("Erro no registro:", error);
+      throw error;
+    }
   };
 
   const logout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    localStorage.clear(); // Limpa tudo
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
     setToken(null);
+    if (socket) socket.disconnect();
     navigate('/login');
   };
 
   const value = { user, token, socket, isAuthenticated: !!token, isLoading, login, register, logout };
-
-  if (isLoading) return <div className="container">Carregando...</div>;
+  if (isLoading) return <div>Carregando...</div>;
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 const useAuth = () => useContext(AuthContext);
 
-/* --- COMPONENTES VISUAIS --- */
+/* --- TEMA --- */
 const ThemeSwitch = () => {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -89,24 +96,31 @@ const ThemeSwitch = () => {
   );
 };
 
+/* --- PÁGINAS DE LOGIN / REGISTRO --- */
 function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
   const { login } = useAuth();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try { await login(email, password); } catch (err) { alert('Falha no login'); }
+    setError(null);
+    try { await login(email, password); } 
+    catch (err) { setError('Falha ao logar. Verifique suas credenciais.'); }
   };
+
   return (
-    <div className="auth-wrapper"><div className="auth-container">
+    <div className="auth-container">
       <div className="auth-header"><h1>Login</h1><ThemeSwitch /></div>
       <form onSubmit={handleSubmit} className="auth-form">
+        {error && <p className="error-message">{error}</p>}
         <label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
         <label>Senha</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
         <button type="submit">Entrar</button>
       </form>
-      <p className="auth-link">Sem conta? <Link to="/register">Registre-se</Link></p>
-    </div></div>
+      <p className="auth-link">Não tem conta? <Link to="/register">Registre-se</Link></p>
+    </div>
   );
 }
 
@@ -115,56 +129,70 @@ function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { register } = useAuth();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try { await register(name, email, password); } catch (err) { alert('Falha no registro'); }
+    try { await register(name, email, password); alert('Conta criada! Faça login.'); }
+    catch (err) { alert('Erro ao registrar. Tente outro email.'); }
   };
+
   return (
-    <div className="auth-wrapper"><div className="auth-container">
+    <div className="auth-container">
       <div className="auth-header"><h1>Registro</h1><ThemeSwitch /></div>
       <form onSubmit={handleSubmit} className="auth-form">
         <label>Nome</label><input type="text" value={name} onChange={e => setName(e.target.value)} required />
         <label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
         <label>Senha</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-        <button type="submit">Criar Conta</button>
+        <button type="submit">Criar</button>
       </form>
-      <p className="auth-link">Já tem conta? <Link to="/login">Faça login</Link></p>
-    </div></div>
+      <p className="auth-link"><Link to="/login">Voltar</Link></p>
+    </div>
   );
 }
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading) return <div>Carregando...</div>;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  return children;
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? children : <Navigate to="/login" />;
 }
 
+/* --- HEADER --- */
 const Header = ({ title, showBackButton, onBackClick }) => {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   return (
     <div className="header">
       {showBackButton && <button className="back-button" onClick={onBackClick}>← Voltar</button>}
       <div className="header-center"><h1>{title}</h1><ThemeSwitch /></div>
-      <div className="header-controls"><button className="logout-button" onClick={logout}><FaSignOutAlt /></button></div>
+      <div className="header-controls">
+        <span style={{ marginRight: 10, fontSize: '0.9rem' }}>{user?.name}</span>
+        <button className="logout-button" onClick={logout} title="Sair"><FaSignOutAlt /></button>
+      </div>
     </div>
   );
 };
 
+/* --- LISTAS E ITENS --- */
 function MainListPage() {
-  const { socket } = useAuth(); 
+  const { socket } = useAuth();
   const [listas, setListas] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [itens, setItens] = useState([]);
   const [newItemName, setNewItemName] = useState('');
   const [newListName, setNewListName] = useState('');
 
-  // Busca inicial
+  // Busca as listas do usuário ao carregar
   useEffect(() => {
-    if (socket) axios.get('/api/lists/').then(res => setListas(res.data)).catch(console.error);
-  }, [socket]);
-  
-  // LISTENERS DO SOCKET (AQUI ESTÁ A SINCRONIZAÇÃO)
+    axios.get('/api/lists/') // ATENÇÃO: /api/lists/ (em inglês)
+      .then(res => setListas(res.data))
+      .catch(err => {
+        console.error("Erro ao buscar listas:", err);
+        if (err.response?.status === 403 || err.response?.status === 401) {
+            alert("Sessão inválida. Faça login novamente.");
+            window.location.href = '/login';
+        }
+      });
+  }, []);
+
+  // Configura os ouvintes do Socket.IO
   useEffect(() => {
     if (!socket) return;
 
@@ -184,18 +212,24 @@ function MainListPage() {
     socket.on('lista_removida_de_todos', handleListDel);
 
     return () => {
-      socket.off('item_adicionado');
-      socket.off('item_atualizado');
-      socket.off('item_deletado');
-      socket.off('nova_lista_para_todos');
-      socket.off('lista_removida_de_todos');
+        socket.off('item_adicionado', handleItemAdd);
+        socket.off('item_atualizado', handleItemUpdate);
+        socket.off('item_deletado', handleItemDelete);
+        socket.off('nova_lista_para_todos', handleListAdd);
+        socket.off('lista_removida_de_todos', handleListDel);
     };
-  }, [selectedList, socket]);
+  }, [socket]);
 
+  // Selecionar uma lista
   const handleSelectList = (lista) => {
+    setItens([]); // Limpa a tela anterior
     setSelectedList(lista);
-    socket.emit('entrar_lista', lista.id);
-    axios.get(`/api/items/${lista.id}`).then(res => setItens(res.data));
+    socket.emit('entrar_lista', lista.id); // Entra na sala
+    
+    // Busca os itens dessa lista
+    axios.get(`/api/items/${lista.id}`)
+        .then(res => setItens(res.data))
+        .catch(err => console.error(err));
   };
 
   // Voltar para a seleção de listas
@@ -245,71 +279,79 @@ function MainListPage() {
   // Adicionar Item
   const handleAddItem = (e) => {
     e.preventDefault();
-    if (!newItemName.trim() || !selectedList) return;
+    if (!newItemName.trim()) return;
     socket.emit('adicionar_item', { listId: selectedList.id, nomeItem: newItemName });
     setNewItemName('');
   };
 
+  // Marcar/Desmarcar Item
+  const handleToggleItem = (item) => {
+    socket.emit('marcar_item', { listId: selectedList.id, itemId: item.id, checked: !item.checked });
+  };
+
+  // Deletar Item
   const handleDeleteItem = (e, itemId) => {
     e.stopPropagation();
     socket.emit('deletar_item', { listId: selectedList.id, itemId });
   };
 
-  const handleCreateList = async (e) => {
-    e.preventDefault();
-    if (newListName.trim()) {
-        const res = await axios.post('/api/lists/', { nome: newListName });
-        setNewListName('');
-        socket.emit('lista_criada', res.data);
-        setListas(prev => [...prev, res.data]);
-    }
-  };
+  // --- RENDERIZAÇÃO ---
   
-  const handleDeleteList = async (e, listId) => {
-    e.stopPropagation();
-    await axios.delete(`/api/lists/${listId}`);
-    socket.emit('lista_deletada', { listId });
-    setListas(prev => prev.filter(l => l.id !== listId));
-  };
-
-  const handleToggleItem = (item) => {
-    socket.emit('marcar_item', { listId: selectedList.id, itemId: item.id, checked: !item.checked });
-  };
-
+  // Tela de Seleção de Listas
   if (!selectedList) {
     return (
-      <div className="App"><div className="container">
+      <div className="container">
         <Header title="Minhas Listas" showBackButton={false} />
-        <ul className="list-selection">{listas.map(l => (
-          <li key={l.id} onClick={() => handleSelectList(l)}><span>{l.nome}</span><button className="delete-btn" onClick={e => handleDeleteList(e, l.id)}><FaTrash /></button></li>
-        ))}</ul>
+        <ul className="list-selection">
+          {listas.length === 0 ? (
+              <p style={{textAlign: 'center', color: '#888', marginTop: 20}}>Nenhuma lista encontrada. Crie uma abaixo!</p>
+          ) : (
+              listas.map(lista => (
+                <li key={lista.id} onClick={() => handleSelectList(lista)}>
+                  <span>{lista.nome}</span>
+                  <button className="delete-btn" onClick={(e) => handleDeleteList(e, lista.id)}><FaTrash /></button>
+                </li>
+              ))
+          )}
+        </ul>
         <form onSubmit={handleCreateList} className="new-list-form">
-          <input type="text" value={newListName} onChange={e => setNewListName(e.target.value)} placeholder="Nome da nova lista" />
+          <input value={newListName} onChange={e => setNewListName(e.target.value)} placeholder="Nome da nova lista..." />
           <button type="submit">Criar</button>
         </form>
-      </div></div>
+      </div>
     );
   }
 
+  // Tela de Itens da Lista
   return (
-    <div className="App"><div className="container">
-      <Header title={selectedList.nome} showBackButton={true} onBackClick={() => setSelectedList(null)} />
+    <div className="container">
+      <Header title={selectedList.nome} showBackButton={true} onBackClick={handleBack} />
       <form onSubmit={handleAddItem} className="add-item-form">
-        <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Novo item" />
-        <button type="submit">Add</button>
+        <input value={newItemName} onChange={e => setNewItemName(e.target.value)} placeholder="Novo item..." autoFocus />
+        <button type="submit">Adicionar</button>
       </form>
-      <ul className="item-list">{itens.map(i => (
-        <li key={i.id} onClick={() => handleToggleItem(i)} className={`list-item ${i.checked ? 'checked' : ''}`}>
-          <span>{i.nome}</span>
-          <button className="delete-btn" onClick={e => handleDeleteItem(e, i.id)}><FaTrash /></button>
-        </li>
-      ))}</ul>
-    </div></div>
+      <ul className="item-list">
+        {itens.map(item => (
+          <li key={item.id} onClick={() => handleToggleItem(item)} className={`list-item ${item.checked ? 'checked' : ''}`}>
+            <span>{item.nome}</span>
+            <button className="delete-btn" onClick={(e) => handleDeleteItem(e, item.id)}><FaTrash /></button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 function App() {
-  return <AuthProvider><Routes><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/*" element={<ProtectedRoute><MainListPage /></ProtectedRoute>} /></Routes></AuthProvider>;
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/*" element={<ProtectedRoute><MainListPage /></ProtectedRoute>} />
+      </Routes>
+    </AuthProvider>
+  );
 }
 
 export default App;
