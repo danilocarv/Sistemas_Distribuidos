@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 app.use(cors());
@@ -29,6 +30,7 @@ mongoose.connect(MONGO_URL)
 
 // --- Modelo do Item ---
 const ItemSchema = new mongoose.Schema({
+  _id: { type: String, required: true }, // <--- ESSENCIAL PARA UUID FUNCIONAR
   listId: { type: String, required: true },
   nome: { type: String, required: true },
   checked: { type: Boolean, default: false }
@@ -64,20 +66,28 @@ io.on('connection', (socket) => {
   // Adicionar Item
   socket.on('adicionar_item', async (data) => {
     try {
+      // GERAÇÃO DE ID ÚNICO E SEGURO
+      const newItemId = crypto.randomUUID();
+
       const novoItem = new Item({
+        _id: newItemId,        // Adicionamos o ID manualmente aqui
         listId: data.listId,
         nome: data.nomeItem,
         checked: false
       });
+
       await novoItem.save();
       
-      // Envia para TODOS na sala da lista (incluindo quem enviou)
+      // Envia para TODOS na sala da lista
       io.to(data.listId).emit('item_adicionado', {
-        id: novoItem._id,
+        id: novoItem._id,      // O frontend recebe o ID único gerado
         listId: novoItem.listId,
         nome: novoItem.nome,
         checked: novoItem.checked
       });
+
+      console.log(`[Socket] Item adicionado: ${novoItem.nome} (ID: ${newItemId})`);
+
     } catch (error) {
       console.error("Erro ao adicionar item:", error);
     }

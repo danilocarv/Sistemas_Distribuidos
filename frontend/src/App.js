@@ -196,17 +196,37 @@ function MainListPage() {
   useEffect(() => {
     if (!socket) return;
 
-    // Handlers
-    const handleItemAdd = (item) => setItens(prev => [...prev, item]); // Pode ser simples assim agora
-    const handleItemUpdate = (item) => setItens(prev => prev.map(i => i.id === item.id ? item : i));
-    const handleItemDelete = ({ itemId }) => setItens(prev => prev.filter(i => i.id !== itemId));
+    // Adicionar: Verifica duplicatas para evitar bugs visuais
+    const handleItemAdd = (item) => {
+        setItens(prev => {
+            if (prev.some(i => i.id === item.id)) return prev; 
+            return [...prev, item];
+        });
+    };
+
+    // Atualizar: Usa Spread Operator (...) para não perder o "nome" do item
+    // Antes você substituía o item todo apenas pelo {id, checked}, perdendo o nome.
+    const handleItemUpdate = (dadosAtualizados) => {
+        setItens(prev => prev.map(item => 
+            item.id === dadosAtualizados.id 
+                ? { ...item, ...dadosAtualizados } // Mantém nome, atualiza checked
+                : item
+        ));
+    };
+
+    // Deletar: Filtra pelo ID
+    const handleItemDelete = (data) => {
+        // O backend manda { listId, itemId }, garantimos pegar o itemId correto
+        const idParaDeletar = data.itemId || data.id; 
+        setItens(prev => prev.filter(i => i.id !== idParaDeletar));
+    };
     
-    // Como removemos o setListas manual, podemos confiar cegamente no socket
+    // Listas (sem alteração na lógica, apenas mantendo)
     const handleListAdd = (lista) => setListas(prev => [...prev, lista]);
     const handleListDel = ({ id }) => setListas(prev => prev.filter(l => l.id !== id));
 
     socket.on('item_adicionado', handleItemAdd);
-    socket.on('item_atualizado', handleItemUpdate);
+    socket.on('item_atualizado', handleItemUpdate); // <--- Lógica corrigida aqui
     socket.on('item_deletado', handleItemDelete);
     socket.on('nova_lista_para_todos', handleListAdd);
     socket.on('lista_removida_de_todos', handleListDel);
