@@ -4,16 +4,33 @@ const http = require('http');
 const mongoose = require('mongoose');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
+const helmet = require('helmet');
+const winston = require('winston');
+
+// --- CONFIGURAÇÃO DE LOGS ---
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [new winston.transports.Console()]
+});
 
 const app = express();
+app.use(helmet());
 app.use(express.json());
 
-// --- CORREÇÃO DE CORS ---
-// Permite que o Frontend (localhost ou nuvem) faça requisições
 app.use(cors({
   origin: '*', 
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Middleware de Log
+app.use((req, res, next) => {
+  logger.info({ message: 'Request received', method: req.method, url: req.url });
+  next();
+});
 
 const server = http.createServer(app);
 const PORT = 3001;
@@ -23,8 +40,18 @@ const ITENS_SERVICE_URL = process.env.ITENS_SERVICE_ENDPOINT || 'http://itens-se
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 mongoose.connect(MONGO_URL)
-  .then(() => console.log('Listas-service conectado ao MongoDB.'))
-  .catch(err => console.error('Erro ao conectar ao MongoDB:', err));
+  .then(() => logger.info('Listas-service conectado ao MongoDB.'))
+  .catch(err => logger.error('Erro ao conectar ao MongoDB:', { error: err.message }));
+
+// --- HEALTH CHECK ---
+app.get('/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  if (dbState === 1) {
+    res.status(200).json({ status: 'UP', service: 'listas-service' });
+  } else {
+    res.status(500).json({ status: 'DOWN', error: 'Database disconnected' });
+  }
+});
 
 const ListaSchema = new mongoose.Schema({
   _id: { type: String, required: true },
@@ -37,11 +64,8 @@ const Lista = mongoose.model('Lista', ListaSchema);
 const verificarToken = (req, res, next) => {
   const tokenHeader = req.headers['authorization'];
   
-  // Logs para debug (pode remover depois se quiser)
-  console.log(`[AUTH] Verificando rota: ${req.method} ${req.originalUrl}`);
-
   if (!tokenHeader) {
-    console.log("[AUTH] Erro: Sem token.");
+    logger.warn("Acesso negado: Sem token.");
     return res.status(401).json({ message: 'Acesso negado. Token não fornecido.' });
   }
 
@@ -49,7 +73,7 @@ const verificarToken = (req, res, next) => {
 
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
-      console.log("[AUTH] Erro: Token inválido.");
+      logger.warn("Acesso negado: Token inválido.");
       return res.status(403).json({ message: 'Token inválido.' });
     }
     req.userId = decoded.id;
@@ -57,7 +81,7 @@ const verificarToken = (req, res, next) => {
   });
 };
 
-// --- ROTAS (AGORA PADRONIZADAS PARA 'lists' EM INGLÊS) ---
+// --- ROTAS ---
 
 // 1. GET /api/lists
 app.get('/api/lists', verificarToken, async (req, res) => {
@@ -69,15 +93,14 @@ app.get('/api/lists', verificarToken, async (req, res) => {
     }));
     res.json(listasParaFrontend);
   } catch (error) {
+    logger.error("Erro ao buscar listas", { error: error.message });
     res.status(500).json({ message: 'Erro ao buscar listas.' });
   }
 });
 
 // 2. POST /api/lists
 app.post('/api/lists', verificarToken, async (req, res) => {
-  console.log("[API] Recebido pedido de criação de lista"); // Log para confirmar que chegou
   const { nome } = req.body;
-  
   if (!nome) {
     return res.status(400).json({ message: 'O nome da lista é obrigatório.' });
   }
@@ -86,29 +109,23 @@ app.post('/api/lists', verificarToken, async (req, res) => {
     const newListId = new Date().getTime().toString();
     const novaLista = new Lista({ _id: newListId, nome, ownerId: req.userId });
     
-    // 1. Salva no Banco de Dados (MongoDB)
     await novaLista.save();
-    console.log(`[API] Lista criada: ${nome} (ID: ${newListId})`);
+    logger.info(`Lista criada`, { listId: newListId, owner: req.userId });
 
-    // --- GATILHO DE NOTIFICAÇÃO (NOVO) ---
-    // Avisa o itens-service para emitir o Socket.io
+    // Notificação (Tenta, mas não falha a requisição se der erro)
     try {
       await axios.post(`${ITENS_SERVICE_URL}/internal/notify/list-created`, {
         id: novaLista._id,
         nome: novaLista.nome
       });
-      console.log("[API] Notificação enviada para itens-service com sucesso.");
     } catch (notifyError) {
-      // Se falhar a notificação, apenas logamos o erro. 
-      // Não queremos travar a criação da lista só porque o socket falhou.
-      console.error(`[AVISO] Falha ao notificar itens-service: ${notifyError.message}`);
+      logger.warn(`Falha ao notificar itens-service`, { error: notifyError.message });
     }
-    // -------------------------------------
 
     res.status(201).json({ id: novaLista._id, nome: novaLista.nome });
 
   } catch (error) {
-    console.error(error);
+    logger.error("Erro ao criar lista", { error: error.message });
     res.status(500).json({ message: 'Erro ao criar lista.' });
   }
 });
@@ -118,14 +135,13 @@ app.delete('/api/lists/:id', verificarToken, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // 1. Verifica se a lista existe e pertence ao usuário
     const lista = await Lista.findOne({ _id: id, ownerId: req.userId });
-    
     if (!lista) {
       return res.status(404).json({ message: 'Lista não encontrada ou sem permissão.' });
     }
 
-    // 2. Tenta deletar os itens associados (COM RETRY - Tolerância a Falhas)
+    // --- LÓGICA DE RETRY (TOLERÂNCIA A FALHAS) ---
+    // Essencial para o requisito de Recuperação Automática
     let tentativas = 3;
     let sucessoItens = false;
 
@@ -133,39 +149,35 @@ app.delete('/api/lists/:id', verificarToken, async (req, res) => {
         try {
             await axios.delete(`${ITENS_SERVICE_URL}/api/items/by-list/${id}`);
             sucessoItens = true;
+            logger.info(`Itens da lista ${id} deletados com sucesso.`);
         } catch (err) {
-            console.warn(`[Tentativa ${4 - tentativas}/3] Falha ao contatar itens-service para deletar itens...`);
             tentativas--;
-            if (tentativas > 0) await sleep(1000); // Espera 1 segundo antes de tentar de novo
+            logger.warn(`Falha na comunicação com itens-service. Tentativas restantes: ${tentativas}`, { listId: id });
+            if (tentativas > 0) await sleep(1000); 
         }
     }
 
     if (!sucessoItens) {
-        // Loga o erro crítico, mas prossegue para deletar a lista (Decisão de projeto: priorizar a ação do usuário)
-        console.error(`ERRO: Não foi possível limpar os itens da lista ${id} após 3 tentativas.`);
+        logger.error(`CRÍTICO: Inconsistência. Lista ${id} será deletada, mas itens podem ter ficado órfãos.`, { listId: id });
+        // Em um sistema real, aqui você enviaria para uma "Dead Letter Queue"
     }
 
-    // 3. Deleta a lista do banco local
     await Lista.findByIdAndDelete(id);
 
-    // 4. --- GATILHO DE NOTIFICAÇÃO (NOVO) ---
-    // Avisa o itens-service para remover a lista da tela de quem estiver vendo
     try {
       await axios.post(`${ITENS_SERVICE_URL}/internal/notify/list-deleted`, { id });
-      console.log("[API] Notificação de deleção enviada para itens-service.");
     } catch (notifyError) {
-      console.error(`[AVISO] Falha ao notificar via socket: ${notifyError.message}`);
+      logger.warn(`Falha ao notificar socket de deleção`, { error: notifyError.message });
     }
-    // ----------------------------------------
 
     res.status(200).json({ message: 'Lista deletada com sucesso.' });
 
   } catch (error) {
-    console.error(`Erro ao deletar lista:`, error);
+    logger.error(`Erro fatal ao deletar lista`, { error: error.message, listId: req.params.id });
     res.status(500).json({ message: 'Erro ao deletar a lista.' });
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`Serviço de Listas rodando na porta ${PORT}`);
+  logger.info(`Serviço de Listas rodando na porta ${PORT}`);
 });

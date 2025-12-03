@@ -3,27 +3,59 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const helmet = require('helmet'); // Segurança extra
+const winston = require('winston'); // Monitoramento
+
+// --- CONFIGURAÇÃO DE LOGS (MONITORAMENTO) ---
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console()
+  ]
+});
 
 const app = express();
+app.use(helmet()); // Proteção de headers HTTP
 app.use(express.json());
 app.use(cors({
   origin: '*', 
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-const PORT = 3000; // A porta é fixa em 3000, como definido no Nginx/Docker
-const MONGO_URL = process.env.MONGO_URL; // VEM DO DOCKER-COMPOSE.YML
+// Middleware para logar todas as requisições (Monitoramento de Tráfego)
+app.use((req, res, next) => {
+  logger.info({ message: 'Request received', method: req.method, url: req.url, ip: req.ip });
+  next();
+});
+
+const PORT = 3000; 
+const MONGO_URL = process.env.MONGO_URL; 
 const JWT_SECRET = process.env.JWT_SECRET || "seu_segredo_super_secreto_aqui";
 
 if (!MONGO_URL) {
-  console.error("Erro fatal: MONGO_URL não foi definida no ambiente.");
+  logger.error("Erro fatal: MONGO_URL não foi definida no ambiente.");
   process.exit(1);
 }
 
 // --- Conexão com o MongoDB ---
 mongoose.connect(MONGO_URL)
-  .then(() => console.log('User-service conectado ao MongoDB (Atlas).'))
-  .catch(err => console.error('Erro ao conectar ao MongoDB:', err));
+  .then(() => logger.info('User-service conectado ao MongoDB (Atlas).'))
+  .catch(err => logger.error('Erro ao conectar ao MongoDB:', { error: err.message }));
+
+// --- HEALTH CHECK (TOLERÂNCIA A FALHAS) ---
+// O Docker ou AWS usa isso para saber se o serviço está "vivo"
+app.get('/health', (req, res) => {
+  const dbState = mongoose.connection.readyState; // 1 = conectado
+  if (dbState === 1) {
+    res.status(200).json({ status: 'UP', database: 'connected' });
+  } else {
+    res.status(500).json({ status: 'DOWN', database: 'disconnected' });
+  }
+});
 
 // --- Modelo de Usuário (Schema) ---
 const UserSchema = new mongoose.Schema({
@@ -46,7 +78,6 @@ UserSchema.pre('save', async function(next) {
 const User = mongoose.model('User', UserSchema);
 
 // --- Rotas de Autenticação ---
-// O Nginx vai traduzir /api/auth/register para /register
 app.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -54,18 +85,19 @@ app.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Todos os campos são obrigatórios.' });
     }
     if (await User.findOne({ email })) {
+      logger.warn(`Tentativa de registro duplicado: ${email}`);
       return res.status(400).json({ error: 'Este e-mail já está em uso.' });
     }
     const user = await User.create({ name, email, password });
     user.password = undefined;
+    logger.info(`Novo usuário registrado: ${user.id}`);
     return res.status(201).json({ user });
   } catch (err) {
-    console.error("Erro no registro:", err);
+    logger.error("Erro no registro:", { error: err.message });
     return res.status(500).json({ error: 'Falha ao registrar usuário.' });
   }
 });
 
-// O Nginx vai traduzir /api/auth/login para /login
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -74,19 +106,22 @@ app.post('/login', async (req, res) => {
     }
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
+      logger.warn(`Login falhou (usuário não encontrado): ${email}`);
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      logger.warn(`Login falhou (senha incorreta): ${email}`);
       return res.status(401).json({ error: 'Credenciais inválidas.' });
     }
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: '1d', // Expira em 1 dia
+      expiresIn: '1d', 
     });
     user.password = undefined;
+    logger.info(`Usuário logado com sucesso: ${user.id}`);
     return res.json({ user, token });
   } catch (err) {
-    console.error("Erro no login:", err);
+    logger.error("Erro no login:", { error: err.message });
     return res.status(500).json({ error: 'Falha ao fazer login.' });
   }
 });
@@ -114,7 +149,6 @@ const authMiddleware = (req, res, next) => {
   });
 };
 
-// O Nginx vai traduzir /api/auth/me para /me
 app.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -123,11 +157,11 @@ app.get('/me', authMiddleware, async (req, res) => {
     }
     return res.json({ user });
   } catch (err) {
-    console.error("Erro ao buscar usuário:", err);
+    logger.error("Erro ao buscar usuário:", { error: err.message });
     return res.status(500).json({ error: 'Falha ao buscar dados do usuário.' });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`User-service rodando na porta ${PORT}`);
+  logger.info(`User-service rodando na porta ${PORT}`);
 });
