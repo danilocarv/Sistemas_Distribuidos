@@ -28,6 +28,11 @@ mongoose.connect(MONGO_URL)
   .then(() => console.log('Itens-service conectado ao MongoDB.'))
   .catch(err => console.error('Erro ao conectar ao MongoDB:', err));
 
+// --- HEALTH CHECK ---
+app.get('/api/items/health', (req, res) => {
+  res.status(200).json({ status: 'UP', service: 'itens-service', uptime: process.uptime() });
+});
+
 // --- Modelo do Item ---
 const ItemSchema = new mongoose.Schema({
   _id: { type: String, required: true }, // <--- ESSENCIAL PARA UUID FUNCIONAR

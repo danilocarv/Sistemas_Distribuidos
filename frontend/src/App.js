@@ -4,7 +4,7 @@ import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import io from 'socket.io-client';
 import { useTheme } from './ThemeContext';
-import { FaTrash, FaSignOutAlt, FaSun, FaMoon } from 'react-icons/fa';
+import { FaTrash, FaSignOutAlt, FaSun, FaMoon, FaEye, FaEyeSlash } from 'react-icons/fa';
 import './App.css';
 
 /* --- AUTH CONTEXT --- */
@@ -30,7 +30,6 @@ function AuthProvider({ children }) {
 
   useEffect(() => {
     if (token) {
-      // Conecta ao socket na raiz (o Nginx roteia para /socket.io)
       const newSocket = io('/', { 
         auth: { token },
         transports: ['websocket', 'polling']
@@ -69,7 +68,7 @@ function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.clear(); // Limpa tudo
+    localStorage.clear();
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
     setToken(null);
@@ -100,13 +99,16 @@ const ThemeSwitch = () => {
 function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    try { await login(email, password); } 
+    try { 
+      await login(email, password); 
+    } 
     catch (err) { setError('Falha ao logar. Verifique suas credenciais.'); }
   };
 
@@ -115,9 +117,45 @@ function LoginPage() {
       <div className="auth-header"><h1>Login</h1><ThemeSwitch /></div>
       <form onSubmit={handleSubmit} className="auth-form">
         {error && <p className="error-message">{error}</p>}
-        <label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-        <label>Senha</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-        <button type="submit">Entrar</button>
+        
+        <label>Email</label>
+        <input 
+          type="email" 
+          value={email} 
+          onChange={e => setEmail(e.target.value)} 
+          list="login-emails" /* Liga ao datalist */
+          required 
+          autoComplete="email"
+          placeholder="Digite seu email..."
+        />
+        {/* Lista de Sugestões (Seta escondida pelo CSS) */}
+        <datalist id="login-emails">
+          <option value="danilo.teste@gmail.com" />
+          <option value="admin@admin.com" />
+          <option value="usuario@teste.com" />
+        </datalist>
+
+        <label>Senha</label>
+        <div className="password-wrapper">
+          <input 
+            type={showPassword ? "text" : "password"} 
+            value={password} 
+            onChange={e => setPassword(e.target.value)} 
+            required 
+            autoComplete="current-password"
+            placeholder="Digite sua senha..."
+          />
+          <button 
+            type="button" 
+            className="toggle-password" 
+            onClick={() => setShowPassword(!showPassword)}
+            tabIndex="-1"
+          >
+            {showPassword ? <FaEyeSlash /> : <FaEye />}
+          </button>
+        </div>
+
+        <button type="submit" style={{marginTop: '10px'}}>Entrar</button>
       </form>
       <p className="auth-link">Não tem conta? <Link to="/register">Registre-se</Link></p>
     </div>
@@ -128,6 +166,7 @@ function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { register } = useAuth();
 
   const handleSubmit = async (e) => {
@@ -140,10 +179,41 @@ function RegisterPage() {
     <div className="auth-container">
       <div className="auth-header"><h1>Registro</h1><ThemeSwitch /></div>
       <form onSubmit={handleSubmit} className="auth-form">
-        <label>Nome</label><input type="text" value={name} onChange={e => setName(e.target.value)} required />
-        <label>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-        <label>Senha</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-        <button type="submit">Criar</button>
+        <label>Nome</label>
+        <input type="text" value={name} onChange={e => setName(e.target.value)} required />
+        
+        <label>Email</label>
+        <input 
+          type="email" 
+          value={email} 
+          onChange={e => setEmail(e.target.value)} 
+          list="register-emails"
+          required 
+        />
+        <datalist id="register-emails">
+           <option value="meuemail@exemplo.com" />
+        </datalist>
+
+        <label>Senha</label>
+        <div className="password-wrapper">
+          <input 
+            type={showPassword ? "text" : "password"} 
+            value={password} 
+            onChange={e => setPassword(e.target.value)} 
+            required 
+            autoComplete="new-password"
+          />
+          <button 
+            type="button" 
+            className="toggle-password" 
+            onClick={() => setShowPassword(!showPassword)}
+            tabIndex="-1"
+          >
+            {showPassword ? <FaEyeSlash /> : <FaEye />}
+          </button>
+        </div>
+
+        <button type="submit" style={{marginTop: '10px'}}>Criar</button>
       </form>
       <p className="auth-link"><Link to="/login">Voltar</Link></p>
     </div>
@@ -181,7 +251,7 @@ function MainListPage() {
 
   // Busca as listas do usuário ao carregar
   useEffect(() => {
-    axios.get('/api/lists/') // ATENÇÃO: /api/lists/ (em inglês)
+    axios.get('/api/lists/')
       .then(res => setListas(res.data))
       .catch(err => {
         console.error("Erro ao buscar listas:", err);
@@ -196,7 +266,6 @@ function MainListPage() {
   useEffect(() => {
     if (!socket) return;
 
-    // Adicionar: Verifica duplicatas para evitar bugs visuais
     const handleItemAdd = (item) => {
         setItens(prev => {
             if (prev.some(i => i.id === item.id)) return prev; 
@@ -204,29 +273,24 @@ function MainListPage() {
         });
     };
 
-    // Atualizar: Usa Spread Operator (...) para não perder o "nome" do item
-    // Antes você substituía o item todo apenas pelo {id, checked}, perdendo o nome.
     const handleItemUpdate = (dadosAtualizados) => {
         setItens(prev => prev.map(item => 
             item.id === dadosAtualizados.id 
-                ? { ...item, ...dadosAtualizados } // Mantém nome, atualiza checked
+                ? { ...item, ...dadosAtualizados } 
                 : item
         ));
     };
 
-    // Deletar: Filtra pelo ID
     const handleItemDelete = (data) => {
-        // O backend manda { listId, itemId }, garantimos pegar o itemId correto
         const idParaDeletar = data.itemId || data.id; 
         setItens(prev => prev.filter(i => i.id !== idParaDeletar));
     };
     
-    // Listas (sem alteração na lógica, apenas mantendo)
     const handleListAdd = (lista) => setListas(prev => [...prev, lista]);
     const handleListDel = ({ id }) => setListas(prev => prev.filter(l => l.id !== id));
 
     socket.on('item_adicionado', handleItemAdd);
-    socket.on('item_atualizado', handleItemUpdate); // <--- Lógica corrigida aqui
+    socket.on('item_atualizado', handleItemUpdate);
     socket.on('item_deletado', handleItemDelete);
     socket.on('nova_lista_para_todos', handleListAdd);
     socket.on('lista_removida_de_todos', handleListDel);
@@ -242,11 +306,10 @@ function MainListPage() {
 
   // Selecionar uma lista
   const handleSelectList = (lista) => {
-    setItens([]); // Limpa a tela anterior
+    setItens([]); 
     setSelectedList(lista);
-    socket.emit('entrar_lista', lista.id); // Entra na sala
+    socket.emit('entrar_lista', lista.id); 
     
-    // Busca os itens dessa lista
     axios.get(`/api/items/${lista.id}`)
         .then(res => setItens(res.data))
         .catch(err => console.error(err));
@@ -255,7 +318,7 @@ function MainListPage() {
   // Voltar para a seleção de listas
   const handleBack = () => {
     if (socket && selectedList) {
-        socket.emit('sair_lista', selectedList.id); // Sai da sala
+        socket.emit('sair_lista', selectedList.id);
     }
     setSelectedList(null);
     setItens([]);
@@ -266,14 +329,7 @@ function MainListPage() {
     e.preventDefault();
     if (!newListName.trim()) return;
     try {
-        // Envia o pedido para o backend
         await axios.post('/api/lists/', { nome: newListName });
-        
-        // --- REMOVA ESTA LINHA ---
-        // setListas(prev => [...prev, res.data]); 
-        // -------------------------
-
-        // Apenas limpe o input. O Socket vai avisar e a lista vai aparecer sozinha.
         setNewListName('');
     } catch (err) {
         alert("Erro ao criar lista.");
@@ -286,11 +342,6 @@ function MainListPage() {
     if (!window.confirm("Tem certeza? Isso apagará todos os itens.")) return;
     try {
         await axios.delete(`/api/lists/${id}`);
-        
-        // --- REMOVA ESTA LINHA ---
-        // setListas(prev => prev.filter(l => l.id !== id));
-        // -------------------------
-        
     } catch (err) {
         alert("Erro ao apagar lista.");
     }

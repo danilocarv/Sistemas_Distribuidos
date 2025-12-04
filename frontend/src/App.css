@@ -1,4 +1,3 @@
-/* frontend/src/App.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
 :root {
@@ -57,7 +56,7 @@ ul { list-style: none; padding: 0; }
 .header-center {
   display: flex;
   align-items: center;
-  gap: 1rem; /* Espaço entre Título e Switch */
+  gap: 1rem;
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -170,6 +169,7 @@ input {
   box-sizing: border-box;
 }
 
+/* Estilos Genéricos de Botão */
 button {
   border: none;
   padding: 0.75rem 1.5rem;
@@ -201,7 +201,7 @@ button:hover { opacity: 0.85; }
   font-size: 0.9rem;
 }
 
-/* --- ESTILOS DE LOGIN/REGISTO (MODERNOS) --- */
+/* --- ESTILOS DE LOGIN/REGISTRO --- */
 .auth-container {
   max-width: 420px;
   margin: 6rem auto;
@@ -253,7 +253,9 @@ button:hover { opacity: 0.85; }
   outline: none;
 }
 
-.auth-form button {
+/* Botão principal de Entrar/Criar */
+/* IMPORTANTE: Usamos > button para não afetar o botão do olhinho */
+.auth-form > button {
   width: 100%;
   margin-top: 1rem;
   font-size: 1.1rem;
@@ -284,4 +286,57 @@ button:hover { opacity: 0.85; }
   padding: 0.75rem;
   text-align: center;
   margin-bottom: 1rem;
+}
+
+/* --- CORREÇÃO DEFINITIVA DA SETA E DO OLHO --- */
+
+/* 1. Seta do Datalist - Remove o triângulo preto */
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* 2. Wrapper da Senha */
+.password-wrapper {
+  position: relative; /* Contexto para o botão absoluto */
+  width: 100%;
+  display: block; /* Garante que fique como um bloco */
+}
+
+/* 3. Input dentro do wrapper */
+.password-wrapper input {
+  width: 100%;
+  padding-right: 45px !important; /* Espaço para o ícone */
+  box-sizing: border-box; /* Garante o tamanho correto */
+}
+
+/* 4. Botão do Olho - CORRIGIDO */
+.toggle-password {
+  position: absolute; /* Flutua sobre o input */
+  top: 50%; /* Centraliza verticalmente */
+  right: 10px; /* Distância da direita */
+  transform: translateY(-50%); /* Ajuste fino do centro */
+  
+  /* Reseta os estilos que estavam herdando do botão genérico */
+  width: 40px !important; 
+  height: 40px !important;
+  margin: 0 !important; /* Remove o margin-top que estava empurrando */
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  
+  color: #718096 !important;
+  cursor: pointer !important;
+  z-index: 20;
+}
+
+.toggle-password:hover {
+  color: #3182ce !important;
+  opacity: 1 !important;
 }

@@ -44,7 +44,7 @@ mongoose.connect(MONGO_URL)
   .catch(err => logger.error('Erro ao conectar ao MongoDB:', { error: err.message }));
 
 // --- HEALTH CHECK ---
-app.get('/health', (req, res) => {
+app.get('/api/lists/health', (req, res) => {
   const dbState = mongoose.connection.readyState;
   if (dbState === 1) {
     res.status(200).json({ status: 'UP', service: 'listas-service' });
