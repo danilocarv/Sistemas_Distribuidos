@@ -1,8 +1,6 @@
-/* frontend/src/App.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
 :root {
-  /* Tema Claro (Padrão) */
   --font-family: 'Inter', sans-serif;
   --bg-color: #f4f7f9;
   --surface-color: #ffffff;
@@ -15,10 +13,11 @@
   --checked-text-color: #a0aec0;
   --header-bg: #2d3748;
   --shadow-color: rgba(0, 0, 0, 0.05);
+  --switch-bg: #cbd5e0;
+  --switch-bg-dark: #4a5568;
 }
 
 body.dark {
-  /* Tema Escuro */
   --bg-color: #1a202c;
   --surface-color: #2d3748;
   --text-color: #e2e8f0;
@@ -40,21 +39,27 @@ body {
   transition: background-color 0.2s, color 0.2s;
 }
 
-.App {
-  text-align: center;
-}
+.App { text-align: center; }
+.container { max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+ul { list-style: none; padding: 0; }
 
-.container {
-  max-width: 700px;
-  margin: 2rem auto;
-  padding: 0 1rem;
-}
-
+/* --- HEADER LAYOUT --- */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+  position: relative;
+  min-height: 40px;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .header h1 {
@@ -62,6 +67,49 @@ body {
   margin: 0;
 }
 
+.header-controls {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* --- NOVO BOTÃO SWITCH (TEMA) --- */
+.theme-switch {
+  width: 50px;
+  height: 26px;
+  background-color: var(--switch-bg);
+  border-radius: 13px;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.theme-switch.dark {
+  background-color: var(--primary-color);
+}
+
+.switch-knob {
+  width: 22px;
+  height: 22px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.theme-switch.dark .switch-knob {
+  transform: translateX(24px);
+}
+
+/* --- COMPONENTES GERAIS --- */
 .list-item, .list-selection li {
   background-color: var(--surface-color);
   border: 1px solid var(--border-color);
@@ -74,10 +122,6 @@ body {
   box-shadow: 0 4px 6px -1px var(--shadow-color);
   transition: all 0.2s ease-in-out;
   text-align: left;
-  cursor: pointer;
-}
-
-.list-selection li {
   cursor: pointer;
 }
 
@@ -101,10 +145,7 @@ body {
   padding: 0.5rem;
   transition: transform 0.2s;
 }
-
-.delete-btn:hover {
-  transform: scale(1.2);
-}
+.delete-btn:hover { transform: scale(1.2); }
 
 form {
   background-color: var(--surface-color);
@@ -116,7 +157,7 @@ form {
   margin-bottom: 2rem;
 }
 
-input[type="text"], input[type="number"] {
+input {
   flex-grow: 1;
   padding: 0.75rem;
   border: 1px solid var(--border-color);
@@ -124,8 +165,11 @@ input[type="text"], input[type="number"] {
   background-color: var(--bg-color);
   color: var(--text-color);
   font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+/* Estilos Genéricos de Botão */
 button {
   border: none;
   padding: 0.75rem 1.5rem;
@@ -135,32 +179,164 @@ button {
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.2s;
+  flex-shrink: 0;
 }
-
-button:hover {
-  opacity: 0.85;
-}
+button:hover { opacity: 0.85; }
 
 .back-button {
   background: transparent;
   color: var(--primary-color);
   padding: 0.5rem 0;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
 }
 
-.theme-toggle-button {
-  background: var(--surface-color);
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  font-size: 1.2rem;
+.logout-button {
+  background: var(--danger-color);
+  color: var(--primary-text-color);
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+/* --- ESTILOS DE LOGIN/REGISTRO --- */
+.auth-container {
+  max-width: 420px;
+  margin: 6rem auto;
+  padding: 2.5rem;
+  background-color: var(--surface-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px var(--shadow-color);
+}
+
+.auth-header {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
+  margin-bottom: 2rem;
 }
 
-ul {
-  list-style: none;
+.auth-header h1 {
+  font-size: 2rem;
+  margin: 0;
+  color: var(--text-color);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   padding: 0;
+  box-shadow: none;
+  background: transparent;
+  margin-bottom: 1rem;
+}
+
+.auth-form label {
+  text-align: left;
+  font-weight: 500;
+  color: var(--subtle-text-color);
+  font-size: 0.9rem;
+  margin-bottom: -0.5rem;
+}
+
+.auth-form input {
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  transition: border-color 0.2s;
+}
+
+.auth-form input:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+/* Botão principal de Entrar/Criar */
+/* IMPORTANTE: Usamos > button para não afetar o botão do olhinho */
+.auth-form > button {
+  width: 100%;
+  margin-top: 1rem;
+  font-size: 1.1rem;
+}
+
+.auth-link {
+  margin-top: 1.5rem;
+  text-align: center;
+  color: var(--subtle-text-color);
+  font-size: 0.95rem;
+}
+
+.auth-link a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.auth-link a:hover {
+  text-decoration: underline;
+}
+
+.error-message {
+  color: var(--danger-color);
+  background-color: rgba(229, 62, 62, 0.1);
+  border: 1px solid var(--danger-color);
+  border-radius: 6px;
+  padding: 0.75rem;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+/* --- CORREÇÃO DEFINITIVA DA SETA E DO OLHO --- */
+
+/* 1. Seta do Datalist - Remove o triângulo preto */
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* 2. Wrapper da Senha */
+.password-wrapper {
+  position: relative; /* Contexto para o botão absoluto */
+  width: 100%;
+  display: block; /* Garante que fique como um bloco */
+}
+
+/* 3. Input dentro do wrapper */
+.password-wrapper input {
+  width: 100%;
+  padding-right: 45px !important; /* Espaço para o ícone */
+  box-sizing: border-box; /* Garante o tamanho correto */
+}
+
+/* 4. Botão do Olho - CORRIGIDO */
+.toggle-password {
+  position: absolute; /* Flutua sobre o input */
+  top: 50%; /* Centraliza verticalmente */
+  right: 10px; /* Distância da direita */
+  transform: translateY(-50%); /* Ajuste fino do centro */
+  
+  /* Reseta os estilos que estavam herdando do botão genérico */
+  width: 40px !important; 
+  height: 40px !important;
+  margin: 0 !important; /* Remove o margin-top que estava empurrando */
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  
+  color: #718096 !important;
+  cursor: pointer !important;
+  z-index: 20;
+}
+
+.toggle-password:hover {
+  color: #3182ce !important;
+  opacity: 1 !important;
 }

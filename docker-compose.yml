@@ -1,50 +1,74 @@
-# docker-compose.yml (VERSÃO main branch + ATLAS)
-version: '3.8' # Você pode remover esta linha se quiser (obsoleta)
+version: '3.8'
 
 services:
+  # --- SERVIÇO DE USUÁRIOS (AUTENTICAÇÃO) ---
+  user-service:
+    build: ./backend/user-service
+    container_name: user_service
+    restart: always
+    volumes:
+      - ./backend/user-service:/app
+      - /app/node_modules
+    environment:
+      - MONGO_URL=mongodb+srv://danilocarvalho2k3_db_user:W12G8N0iNJg2LoZH@clusterlistacompras.9pirx8u.mongodb.net/?appName=ClusterListaCompras
+      # Segredo compartilhado para gerar e validar tokens
+      - JWT_SECRET=minha_senha_super_secreta_compartilhada
+
+  # --- SERVIÇO DE LISTAS ---
   listas-service:
     build: ./backend/listas-service
     container_name: listas_service
+    restart: always
     volumes:
       - ./backend/listas-service:/app
       - /app/node_modules
     environment:
-      # Substitua pela sua string de conexão completa do Atlas
       - MONGO_URL=mongodb+srv://danilocarvalho2k3_db_user:W12G8N0iNJg2LoZH@clusterlistacompras.9pirx8u.mongodb.net/?appName=ClusterListaCompras
-    # depends_on: db (Removido)
-    # networks: app-network (Se não estiver usando, pode remover)
+      # Comunicação interna com o serviço de itens
+      - ITENS_SERVICE_ENDPOINT=http://itens-service:3002
+      # Segredo compartilhado (DEVE SER IGUAL AO DO USER-SERVICE)
+      - JWT_SECRET=minha_senha_super_secreta_compartilhada
 
+  # --- SERVIÇO DE ITENS ---
   itens-service:
     build: ./backend/itens-service
     container_name: itens_service
+    restart: always
     volumes:
       - ./backend/itens-service:/app
       - /app/node_modules
     environment:
-      # Substitua pela sua string de conexão completa do Atlas
       - MONGO_URL=mongodb+srv://danilocarvalho2k3_db_user:W12G8N0iNJg2LoZH@clusterlistacompras.9pirx8u.mongodb.net/?appName=ClusterListaCompras
-    # depends_on: db (Removido)
-    # networks: app-network (Se não estiver usando, pode remover)
+      # Segredo compartilhado (DEVE SER IGUAL AO DO USER-SERVICE)
+      - JWT_SECRET=minha_senha_super_secreta_compartilhada
 
+  # --- FRONTEND REACT ---
   frontend:
     build: ./frontend
     container_name: frontend_service
+    restart: always
     volumes:
       - ./frontend/src:/app/src
-    # networks: app-network (Se não estiver usando, pode remover)
+    # stdin_open: true # Útil se o container do React fechar sozinho
 
+  # --- NGINX (GATEWAY / PROXY REVERSO) ---
+  # --- NGINX (GATEWAY / PROXY REVERSO) ---
   proxy:
     build:
       context: ./nginx
     container_name: nginx_proxy
+    restart: always
     ports:
-      - "80:80"
+      - "80:80"   # HTTP (vai redirecionar)
+      - "443:443" # HTTPS (Seguro)
+    volumes:
+      # Monta a pasta certs criada no passo 1 para dentro do container
+      - ./certs/nginx-selfsigned.crt:/etc/nginx/certs/nginx-selfsigned.crt
+      - ./certs/nginx-selfsigned.key:/etc/nginx/certs/nginx-selfsigned.key
+      # Configuração
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - listas-service
       - itens-service
+      - user-service
       - frontend
-    # networks: app-network (Se não estiver usando, pode remover)
-
-# volumes: (Seção inteira removida se não houver outros volumes)
-
-# networks: (Seção inteira removida se não estiver usando)

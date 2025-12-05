@@ -1,139 +1,187 @@
-// backend/itens-service/index.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
+
+// --- CONFIGURAÇÃO DO SOCKET.IO ---
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "DELETE", "PUT"]
+  }
+});
+
 const PORT = 3002;
 const MONGO_URL = process.env.MONGO_URL;
+const JWT_SECRET = process.env.JWT_SECRET || "segredo_padrao_inseguro";
 
+// --- Conexão com MongoDB ---
 mongoose.connect(MONGO_URL)
   .then(() => console.log('Itens-service conectado ao MongoDB.'))
   .catch(err => console.error('Erro ao conectar ao MongoDB:', err));
-  
+
+// --- HEALTH CHECK ---
+app.get('/api/items/health', (req, res) => {
+  res.status(200).json({ status: 'UP', service: 'itens-service', uptime: process.uptime() });
+});
+
+// --- Modelo do Item ---
 const ItemSchema = new mongoose.Schema({
-  _id: { type: String, required: true },
+  _id: { type: String, required: true }, // <--- ESSENCIAL PARA UUID FUNCIONAR
+  listId: { type: String, required: true },
   nome: { type: String, required: true },
-  checked: { type: Boolean, default: false },
-  listId: { type: String, required: true, index: true }
+  checked: { type: Boolean, default: false }
 });
 const Item = mongoose.model('Item', ItemSchema);
 
-const LockSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // Usaremos o itemId como _id do lock
-  createdAt: { type: Date, expires: '10s', default: Date.now } // TTL: trava expira em 10s
-});
-const Lock = mongoose.model('Lock', LockSchema);
-
-app.get('/items/:listId', async (req, res) => {
-  try {
-    const { listId } = req.params;
-    const itensDoBanco = await Item.find({ listId: listId });
-    const itensParaFrontend = itensDoBanco.map(item => ({
-      id: item._id, nome: item.nome, checked: item.checked, listId: item.listId 
-    }));
-    res.json(itensParaFrontend);
-  } catch (error) {
-    res.status(500).json({ message: 'Erro ao buscar itens.' });
+// --- Middleware de Autenticação para Socket.IO ---
+// Isso permite saber QUEM está conectado
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    console.log("Aviso: Conexão socket sem token.");
+    return next(); 
   }
+  
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return next(new Error("Token inválido"));
+    socket.userId = decoded.id;
+    next();
+  });
 });
 
-app.delete('/items/by-list/:listId', async (req, res) => {
-    try {
-        const { listId } = req.params;
-        const result = await Item.deleteMany({ listId: listId });
-        console.log(`Deletados ${result.deletedCount} itens da lista ${listId} via HTTP.`);
-        res.status(200).json({ message: `${result.deletedCount} itens deletados.` });
-    } catch (error) {
-        console.error('Erro ao deletar itens via HTTP:', error);
-        res.status(500).json({ message: 'Erro ao deletar itens.' });
-    }
-});
-
+// --- Lógica do Tempo Real ---
 io.on('connection', (socket) => {
-  console.log(`[Socket.IO] Cliente conectado: ${socket.id}`);
+  console.log(`Cliente conectado: ${socket.id}`);
 
+  // IMPORTANTE: Entrar na sala da lista específica
   socket.on('entrar_lista', (listId) => {
     socket.join(listId);
-    console.log(`[Socket.IO] Cliente ${socket.id} entrou na sala da lista ${listId}`);
+    console.log(`Socket ${socket.id} entrou na sala ${listId}`);
   });
 
+  // Adicionar Item
+  socket.on('adicionar_item', async (data) => {
+    try {
+      // GERAÇÃO DE ID ÚNICO E SEGURO
+      const newItemId = crypto.randomUUID();
+
+      const novoItem = new Item({
+        _id: newItemId,        // Adicionamos o ID manualmente aqui
+        listId: data.listId,
+        nome: data.nomeItem,
+        checked: false
+      });
+
+      await novoItem.save();
+      
+      // Envia para TODOS na sala da lista
+      io.to(data.listId).emit('item_adicionado', {
+        id: novoItem._id,      // O frontend recebe o ID único gerado
+        listId: novoItem.listId,
+        nome: novoItem.nome,
+        checked: novoItem.checked
+      });
+
+      console.log(`[Socket] Item adicionado: ${novoItem.nome} (ID: ${newItemId})`);
+
+    } catch (error) {
+      console.error("Erro ao adicionar item:", error);
+    }
+  });
+
+  // Deletar Item
+  socket.on('deletar_item', async (data) => {
+    try {
+      await Item.findByIdAndDelete(data.itemId);
+      // Avisa todos na sala que o item sumiu
+      io.to(data.listId).emit('item_deletado', data);
+    } catch (error) {
+      console.error("Erro ao deletar item:", error);
+    }
+  });
+
+  // Marcar Item
+  socket.on('marcar_item', async (data) => {
+    try {
+      await Item.findByIdAndUpdate(data.itemId, { checked: data.checked });
+      io.to(data.listId).emit('item_atualizado', {
+        id: data.itemId,
+        listId: data.listId,
+        checked: data.checked
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar item:", error);
+    }
+  });
+
+  // --- EVENTOS GLOBAIS DE LISTA ---
   socket.on('lista_criada', (novaLista) => {
-    // Retransmite para todos os outros clientes
     socket.broadcast.emit('nova_lista_para_todos', novaLista);
   });
 
-  socket.on('lista_deletada', ({ listId }) => {
-    // Retransmite para todos os outros clientes
-    socket.broadcast.emit('lista_removida_de_todos', { id: listId });
-  });
-
-  socket.on('adicionar_item', async ({ listId, nomeItem }) => {
-    try {
-      const newItemId = new Date().getTime().toString();
-      const item = new Item({ _id: newItemId, nome: nomeItem, listId: listId });
-      await item.save();
-      const itemParaEmitir = { id: item._id, nome: item.nome, checked: item.checked, listId: item.listId };
-      io.to(listId).emit('item_adicionado', itemParaEmitir);
-    } catch (error) {
-      console.error('[BACKEND] ERRO ao adicionar item:', error);
-    }
-  });
-
-  socket.on('marcar_item', async ({ listId, itemId, checked }) => {
-  console.log(`[Coordenação] Tentando adquirir lock para item ${itemId} por ${socket.id}`);
-  try {
-    // --- TENTA ADQUIRIR O LOCK ---
-    await Lock.create({ _id: itemId });
-    console.log(`[Coordenação] Lock adquirido para item ${itemId} por ${socket.id}`);
-
-    // --- SE CONSEGUIU O LOCK, PROSSEGUE ---
-    try {
-      const itemAtualizado = await Item.findByIdAndUpdate(itemId, { checked: checked }, { new: true });
-
-      if (itemAtualizado) {
-        const itemParaEmitir = { id: itemAtualizado._id, nome: itemAtualizado.nome, checked: itemAtualizado.checked, listId: itemAtualizado.listId };
-        io.to(listId).emit('item_atualizado', itemParaEmitir);
-        console.log(`[Coordenação] Item ${itemId} atualizado e evento emitido.`);
-      }
-    } finally {
-      // --- LIBERA O LOCK ---
-      await Lock.deleteOne({ _id: itemId });
-      console.log(`[Coordenação] Lock liberado para item ${itemId} por ${socket.id}`);
-    }
-
-  } catch (error) {
-    // --- SE FALHOU EM ADQUIRIR O LOCK ---
-    if (error.code === 11000) { 
-      console.log(`[Coordenação] Falha ao adquirir lock para item ${itemId} (já bloqueado). Tentativa por ${socket.id}`);
-    } else {
-      console.error(`[Coordenação] Erro inesperado ao tentar bloquear item ${itemId}:`, error);
-    }
-  }
-});
-
-  socket.on('deletar_item', async ({ listId, itemId }) => {
-    try {
-      const deletedItem = await Item.findByIdAndDelete(itemId);
-      if (deletedItem) {
-        io.to(listId).emit('item_deletado', { listId, itemId });
-      }
-    } catch (error) {
-      console.error(`[BACKEND] ERRO ao deletar o item ${itemId}:`, error);
-    }
+  socket.on('lista_deletada', (data) => {
+    socket.broadcast.emit('lista_removida_de_todos', data);
   });
 
   socket.on('disconnect', () => {
-    console.log(`[Socket.IO] Cliente desconectado: ${socket.id}`);
+    console.log('Cliente desconectado:', socket.id);
   });
 });
 
+// --- Rotas HTTP ---
+app.get('/api/items/:listId', async (req, res) => {
+  try {
+    const itens = await Item.find({ listId: req.params.listId });
+    const itensFormatados = itens.map(i => ({
+      id: i._id,
+      listId: i.listId,
+      nome: i.nome,
+      checked: i.checked
+    }));
+    res.json(itensFormatados);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao buscar itens' });
+  }
+});
+
+app.delete('/api/items/by-list/:listId', async (req, res) => {
+  try {
+    await Item.deleteMany({ listId: req.params.listId });
+    res.status(200).send('Itens deletados');
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao deletar itens' });
+  }
+});
+
+// --- ROTAS INTERNAS PARA NOTIFICAÇÃO (CHAMADAS PELO LISTAS-SERVICE) ---
+
+// Rota para avisar que uma lista foi criada
+app.post('/internal/notify/list-created', (req, res) => {
+  const lista = req.body;
+  // Emite para TODOS os sockets conectados
+  io.emit('nova_lista_para_todos', lista);
+  console.log(`[Socket] Notificação de nova lista enviada: ${lista.nome}`);
+  res.sendStatus(200);
+});
+
+// Rota para avisar que uma lista foi deletada
+app.post('/internal/notify/list-deleted', (req, res) => {
+  const { id } = req.body;
+  // Emite para TODOS os sockets conectados
+  io.emit('lista_removida_de_todos', { id });
+  console.log(`[Socket] Notificação de lista removida enviada: ${id}`);
+  res.sendStatus(200);
+});
+
 server.listen(PORT, () => {
-  console.log(`Serviço de Itens (Real-Time) rodando na porta ${PORT}`);
+  console.log(`Serviço de Itens rodando na porta ${PORT}`);
 });

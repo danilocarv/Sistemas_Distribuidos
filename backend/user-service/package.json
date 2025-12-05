@@ -1,21 +1,22 @@
 {
-  "name": "listas-service",
+  "name": "user-service",
   "version": "1.0.0",
-  "description": "Serviço para gerenciar listas de compras",
+  "description": "Microsserviço de autenticação e usuários",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
-    "axios": "^1.12.2",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.18.2",
+    "mongoose": "^8.4.1",
     "winston": "^3.18.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.3"
   }
 }
