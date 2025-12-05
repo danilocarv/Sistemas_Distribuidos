@@ -86,7 +86,13 @@ const verificarToken = (req, res, next) => {
 // 1. GET /api/lists
 app.get('/api/lists', verificarToken, async (req, res) => {
   try {
-    const listasDoBanco = await Lista.find({ ownerId: req.userId });
+    // ANTES (Privado):
+    // const listasDoBanco = await Lista.find({ ownerId: req.userId });
+
+    // DEPOIS (Compartilhado/Global):
+    // Traz todas as listas do banco, independente de quem criou
+    const listasDoBanco = await Lista.find({}); 
+
     const listasParaFrontend = listasDoBanco.map(lista => ({
       id: lista._id,
       nome: lista.nome
@@ -97,6 +103,7 @@ app.get('/api/lists', verificarToken, async (req, res) => {
     res.status(500).json({ message: 'Erro ao buscar listas.' });
   }
 });
+
 
 // 2. POST /api/lists
 app.post('/api/lists', verificarToken, async (req, res) => {
@@ -134,8 +141,12 @@ app.post('/api/lists', verificarToken, async (req, res) => {
 app.delete('/api/lists/:id', verificarToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const lista = await Lista.findOne({ _id: id, ownerId: req.userId });
+
+    // ANTES (Só o dono pode deletar):
+    // const lista = await Lista.findOne({ _id: id, ownerId: req.userId });
+
+    // DEPOIS (Qualquer um logado pode deletar):
+    const lista = await Lista.findOne({ _id: id });
     if (!lista) {
       return res.status(404).json({ message: 'Lista não encontrada ou sem permissão.' });
     }
